@@ -1,5 +1,8 @@
 #define _CRT_SECURE_NO_WARNINGS
-
+#define LOCALHOST "127.0.0.1"
+#define PORT 420
+#define SIZE_OF_DATA 1024
+#define STRING_LENGTH 20
 
 #include<winsock.h>
 #include<stdio.h>
@@ -7,19 +10,86 @@
 #include <SDL.h>
 #include <SDL_ttf.h>
 
-#define LOCALHOST "127.0.0.1"
-#define PORT 420
-
 #pragma comment(lib, "Ws2_32.lib")
 
-void ping_server(const char* address)
+//struktura danych gracza
+typedef struct Player_type
+{
+    //sk³adowa pozioma pozycji gracza
+    int x;
+    //sk³adowa pionowa pozycji gracza
+    int y;
+    //punkty gracza
+    int points;
+    //nick gracza
+    char nick[STRING_LENGTH];
+}Player_type;
+
+//struktura mapy
+typedef struct Map_type
+{
+    //liczba graczy
+    int number_of_players;
+    //tablica graczy
+    Player_type* players;
+}Map_type;
+
+
+void deserialize_map(char* data, Map_type* map)
+{
+    /*char int_holder[sizeof(int)];
+    strcpy(data, "");
+    for (int i = 0; i < map->number_of_players; i++)
+    {
+        memcpy(int_holder, &(map->players[i].x), sizeof(int));
+        strcat(data, int_holder);
+        memcpy(int_holder, &(map->players[i].y), sizeof(int));
+        strcat(data, int_holder);
+        memcpy(int_holder, &(map->players[i].points), sizeof(int));
+        strcat(data, int_holder);
+        strcat(data, map->players[i].nick);
+    }*/
+    int position = 0;
+    for (int i = 0; i < map->number_of_players; i++)
+    {
+        memcpy(&(map->players[i].x), data + position, sizeof(int));
+        position += sizeof(int);
+        memcpy(&(map->players[i].y), data + position, sizeof(int));
+        position += sizeof(int);
+        memcpy(&(map->players[i].points), data + position, sizeof(int));
+        position += sizeof(int);
+    }
+}
+
+
+int ping_server(SOCKET s)
+{
+    int latency;
+    char buf[STRING_LENGTH];
+    clock_t start, end;
+    strcpy(buf, "PING");
+    send(s, buf, STRING_LENGTH, 0);
+    start = clock();
+    if (recv(s, buf, STRING_LENGTH, 0) > 0)
+    {
+        end = clock();
+        latency = (end - start) / (CLOCKS_PER_SEC / 1000);
+        buf[5] = '\0';
+    }
+    else
+    {
+        printf("Ping lost\n");
+    }
+    return latency;
+}
+
+SOCKET connect_to_server(const char* address)
 {
     SOCKET s;
     struct sockaddr_in sa;
     WSADATA wsas;
     WORD version;
     int result;
-    char buf[30];
     version = MAKEWORD(2, 0);
     WSAStartup(version, &wsas);
     s = socket(AF_INET, SOCK_STREAM, 0);
@@ -27,69 +97,41 @@ void ping_server(const char* address)
     sa.sin_family = AF_INET;
     sa.sin_port = htons(PORT);
     sa.sin_addr.s_addr = inet_addr(address);
-    int latency;
-    clock_t start, end;
     result = connect(s, (struct sockaddr FAR*) & sa, sizeof(sa));
     if (result == SOCKET_ERROR)
     {
-        printf("Cannot connect to %s\n", address);
+        return 0;
     }
     else
     {
-        while (1)
-        {
-            strcpy(buf, "PING");
-            send(s, buf, 30, 0);
-            start = clock();
-            if (recv(s, buf, 30, 0) > 0)
-            {
-                end = clock();
-                latency = (end - start) / (CLOCKS_PER_SEC / 1000);
-                buf[5] = '\0';
-                printf("%s received after %d ms\n", buf, latency);
-            }
-            else
-            {
-                printf("Ping lost\n");
-            }
-            Sleep(2000);
-        }
+        return s;
     }
+}
+
+void close_connection_to_server(SOCKET s)
+{
     closesocket(s);
     WSACleanup();
 }
 
-void send_key_to_server(const char* address, const char* key)
+void send_key_to_server(SOCKET s, const char* key)
 {
-    SOCKET s;
-    struct sockaddr_in sa;
-    WSADATA wsas;
-    WORD version;
-    int result;
-    version = MAKEWORD(2, 0);
-    WSAStartup(version, &wsas);
-    s = socket(AF_INET, SOCK_STREAM, 0);
-    memset((void*)(&sa), 0, sizeof(sa));
-    sa.sin_family = AF_INET;
-    sa.sin_port = htons(PORT);
-    sa.sin_addr.s_addr = inet_addr(address);
-    char buf[20];
-    result = connect(s, (struct sockaddr FAR*) & sa, sizeof(sa));
-    if (result == SOCKET_ERROR)
-    {
-        printf("Cannot connect to %s\n", address);
-    }
-    else
-    {
-        strcpy(buf, key);
-        send(s, buf, 20, 0);
-    }
-    closesocket(s);
-    WSACleanup();
+    char buf[STRING_LENGTH];
+    strcpy(buf, key);
+    send(s, buf, STRING_LENGTH, 0);
+}
+
+void receive_data_from_server(SOCKET s, Map_type* map)
+{
+    int byte_no = SIZE_OF_DATA;
+    char* data = (char*)malloc(byte_no);
+    recv(s, data, byte_no, 0);
+    deserialize_map(data, map);
 }
 
 int main(int argc, char** argv)
 {
+    Map_type* map;
     TTF_Init();
     SDL_Window* win;
     SDL_Renderer *renderer;
@@ -101,6 +143,7 @@ int main(int argc, char** argv)
     SDL_Surface* text_surface;
     SDL_Event event;
     int is_running = 1;
+    int latency;
    // SDL_Color color={0,0,0};
 
     if (SDL_Init(SDL_INIT_EVERYTHING) != 0) {
@@ -141,6 +184,7 @@ int main(int argc, char** argv)
         SDL_Quit();
         return 1;
     }*/
+    SOCKET server = connect_to_server(LOCALHOST);
     int texW = 100;
     int texH = 20;
     SDL_Rect dstrect = { 0, 0, texW, texH };
@@ -152,16 +196,20 @@ int main(int argc, char** argv)
 			switch (event.type) {
 			case SDL_KEYDOWN:
 			    if (event.key.keysym.sym == SDLK_UP) {
-                    send_key_to_server(LOCALHOST, "up");
+                    send_key_to_server(server, "up");
+                    receive_data_from_server(server, map);
 			    }
 			    else if (event.key.keysym.sym == SDLK_DOWN) {
-                    send_key_to_server(LOCALHOST, "down");
+                    send_key_to_server(server, "down");
+                    receive_data_from_server(server, map);
 			    }
 				else if (event.key.keysym.sym == SDLK_RIGHT) {	
-                    send_key_to_server(LOCALHOST, "right");
+                    send_key_to_server(server, "right");
+                    receive_data_from_server(server, map);
 				}
 				else if (event.key.keysym.sym == SDLK_LEFT) {
-                    send_key_to_server(LOCALHOST, "left");
+                    send_key_to_server(server, "left");
+                    receive_data_from_server(server, map);
 				}
 				break;
 			case SDL_KEYUP:
@@ -171,6 +219,8 @@ int main(int argc, char** argv)
 				break;
 			};
 		};
+        latency = ping_server(server);
+        receive_data_from_server(server, map);
         SDL_QueryTexture(texture, NULL, NULL, &texW, &texH);
         SDL_RenderClear(renderer);
         SDL_RenderCopy(renderer, texture, NULL, &dstrect);
