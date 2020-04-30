@@ -1,54 +1,17 @@
 #define _CRT_SECURE_NO_WARNINGS
-#define LOCALHOST "127.0.0.1"
-#define PORT 420
-#define SIZE_OF_DATA 1024
-#define STRING_LENGTH 20
 
 #include<winsock.h>
 #include<stdio.h>
 #include<time.h>
 #include <SDL.h>
 #include <SDL_ttf.h>
+#include "../common/common_structures.h"
 
 #pragma comment(lib, "Ws2_32.lib")
-
-//struktura danych gracza
-typedef struct Player_type
-{
-    //sk³adowa pozioma pozycji gracza
-    int x;
-    //sk³adowa pionowa pozycji gracza
-    int y;
-    //punkty gracza
-    int points;
-    //nick gracza
-    char nick[STRING_LENGTH];
-}Player_type;
-
-//struktura mapy
-typedef struct Map_type
-{
-    //liczba graczy
-    int number_of_players;
-    //tablica graczy
-    Player_type* players;
-}Map_type;
 
 
 void deserialize_map(char* data, Map_type* map)
 {
-    /*char int_holder[sizeof(int)];
-    strcpy(data, "");
-    for (int i = 0; i < map->number_of_players; i++)
-    {
-        memcpy(int_holder, &(map->players[i].x), sizeof(int));
-        strcat(data, int_holder);
-        memcpy(int_holder, &(map->players[i].y), sizeof(int));
-        strcat(data, int_holder);
-        memcpy(int_holder, &(map->players[i].points), sizeof(int));
-        strcat(data, int_holder);
-        strcat(data, map->players[i].nick);
-    }*/
     int position = 0;
     for (int i = 0; i < map->number_of_players; i++)
     {
@@ -58,6 +21,29 @@ void deserialize_map(char* data, Map_type* map)
         position += sizeof(int);
         memcpy(&(map->players[i].points), data + position, sizeof(int));
         position += sizeof(int);
+    }
+}
+
+void deserialize_map_fully(char* data, Map_type* map)
+{
+    int position = 0;
+    for (int i = 0; i < map->number_of_players; i++)
+    {
+        memcpy(&(map->players[i].x), data + position, sizeof(int));
+        position += sizeof(int);
+        memcpy(&(map->players[i].y), data + position, sizeof(int));
+        position += sizeof(int);
+        memcpy(&(map->players[i].ready), data + position, sizeof(int));
+        position += sizeof(int);
+        memcpy(&(map->players[i].connected), data + position, sizeof(int));
+        position += sizeof(int);
+        memcpy(&(map->players[i].points), data + position, sizeof(int));
+        position += sizeof(int);
+        int nick_length;
+        memcpy(&nick_length, data + position, sizeof(int));
+        position += sizeof(int);
+        strncpy(map->players[i].nick, data + position, nick_length);
+        position += nick_length;
     }
 }
 
@@ -83,7 +69,7 @@ int ping_server(SOCKET s)
     return latency;
 }
 
-SOCKET connect_to_server(const char* address)
+SOCKET connect_to_server(const char* address, Map_type *map)
 {
     SOCKET s;
     struct sockaddr_in sa;
@@ -98,18 +84,45 @@ SOCKET connect_to_server(const char* address)
     sa.sin_port = htons(PORT);
     sa.sin_addr.s_addr = inet_addr(address);
     result = connect(s, (struct sockaddr FAR*) & sa, sizeof(sa));
+    char buf[STRING_LENGTH];
     if (result == SOCKET_ERROR)
     {
         return 0;
     }
     else
     {
+        strcpy(buf, "connect");
+        send(s, buf, STRING_LENGTH, 0);
+        strcpy(buf, "BOB");
+        send(s, buf, STRING_LENGTH, 0);
+        /*
+        recv(s, buf, STRING_LENGTH, 0);
+        if(strcmp(buf, "player_connected"))
+        {
+        char* data = (char*)malloc(sizeof(int) + STRING_LENGTH);
+        recv(s, data, sizeof(int) + STRING_LENGTH, 0);
+
+        for (int i = 0; i < NUMBER_OF_CLIENTS; i++)
+        {
+            send(arguments->map->players[i].socket, buf, STRING_LENGTH, 0);
+            char* data = (char*)malloc(sizeof(int) + STRING_LENGTH);
+            memcpy(data, &player_number);
+            strcat(data, arguments->map->players[player_number]);
+            send(arguments->map->players[i].socket, data, sizeof(int) + STRING_LENGTH, 0);
+            free(data);
+        }
+        */
         return s;
     }
 }
 
+
+
 void close_connection_to_server(SOCKET s)
 {
+    char buf[STRING_LENGTH];
+    strcpy(buf, "disconnect");
+    send(s, buf, STRING_LENGTH, 0);
     closesocket(s);
     WSACleanup();
 }
