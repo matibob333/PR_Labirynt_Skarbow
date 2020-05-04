@@ -2,6 +2,7 @@
 #define PORT 420
 #define SIZE_OF_DATA 1024
 #define STRING_LENGTH 20
+#define LOCALHOST "127.0.0.1"
 
 //struktura danych gracza
 typedef struct Player_type
@@ -19,7 +20,7 @@ typedef struct Player_type
 	//gniazdo danego gracza do obsługi
 	SOCKET socket;
 	//czy gracz jest połączony
-	int connected
+	int connected;
 }Player_type;
 
 //struktura mapy
