@@ -3,7 +3,7 @@
 #include<windows.h>
 #include<stdio.h>
 #include<time.h>
-#include "../common/common_structures.h"
+#include "common_structures.h"
 
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -29,15 +29,12 @@ void serialize_map(char* data, Map_type* map)
 	int position = 0;
 	for (int i = 0; i < NUMBER_OF_CLIENTS; i++)
 	{
-		if (map->players[i].connected)
-		{
 			memcpy(data + position, &(map->players[i].x), sizeof(int));
 			position += sizeof(int);
 			memcpy(data + position, &(map->players[i].y), sizeof(int));
 			position += sizeof(int);
 			memcpy(data + position, &(map->players[i].points), sizeof(int));
 			position += sizeof(int);
-		}
 	}
 }
 
@@ -47,24 +44,21 @@ void serialize_map_fully(char* data, Map_type* map, int *everybody_ready)
 	int position = 0;
 	for (int i = 0; i < NUMBER_OF_CLIENTS; i++)
 	{
-		if (map->players[i].connected)
-		{
-			memcpy(data + position, &(map->players[i].x), sizeof(int));
-			position += sizeof(int);
-			memcpy(data + position, &(map->players[i].y), sizeof(int));
-			position += sizeof(int);
-			memcpy(data + position, &(map->players[i].ready), sizeof(int));
-			position += sizeof(int);
-			memcpy(data + position, &(map->players[i].connected), sizeof(int));
-			position += sizeof(int);
-			memcpy(data + position, &(map->players[i].points), sizeof(int));
-			position += sizeof(int);
-			int length = strlen(map->players[i].nick);
-			memcpy(data + position, &length, sizeof(int));
-			position += sizeof(int);
-			memcpy(data + position, map->players[i].nick, length);
-			position += length;
-		}
+		memcpy(data + position, &(map->players[i].x), sizeof(int));
+		position += sizeof(int);
+		memcpy(data + position, &(map->players[i].y), sizeof(int));
+		position += sizeof(int);
+		memcpy(data + position, &(map->players[i].ready), sizeof(int));
+		position += sizeof(int);
+		memcpy(data + position, &(map->players[i].connected), sizeof(int));
+		position += sizeof(int);
+		memcpy(data + position, &(map->players[i].points), sizeof(int));
+		position += sizeof(int);
+		int length = strlen(map->players[i].nick);
+		memcpy(data + position, &length, sizeof(int));
+		position += sizeof(int);
+		memcpy(data + position, map->players[i].nick, length);
+		position += length;
 	}
 	memcpy(data + position, everybody_ready, sizeof(int));
 }
@@ -84,7 +78,7 @@ DWORD WINAPI client_thread(void* args)
 		if (recv(client_socket, buf, STRING_LENGTH, 0) > 0)
 		{
 			//gracz do³¹cza do gry
-			if (strcmp(buf, "connect"))
+			if (strcmp(buf, "connect")==0)
 			{
 				recv(client_socket, buf, STRING_LENGTH, 0);
 				if (WaitForSingleObject(arguments->map_mutex, INFINITE) == WAIT_OBJECT_0)
@@ -101,7 +95,7 @@ DWORD WINAPI client_thread(void* args)
 				ReleaseMutex(arguments->map_mutex);
 			}
 			//gracz zg³asza gotowoœæ
-			else if (strcmp(buf, "ready"))
+			else if (strcmp(buf, "ready")==0)
 			{
 				if (WaitForSingleObject(arguments->map_mutex, INFINITE) == WAIT_OBJECT_0)
 				{
@@ -110,7 +104,7 @@ DWORD WINAPI client_thread(void* args)
 				ReleaseMutex(arguments->map_mutex);
 			}
 			//gracz zg³asza brak gotowoœci
-			else if (strcmp(buf, "not_ready"))
+			else if (strcmp(buf, "not_ready")==0)
 			{
 				if (WaitForSingleObject(arguments->map_mutex, INFINITE) == WAIT_OBJECT_0)
 				{
@@ -119,7 +113,7 @@ DWORD WINAPI client_thread(void* args)
 				ReleaseMutex(arguments->map_mutex);
 			}
 			//gracz od³¹cza siê od rozrywki
-			else if (strcmp(buf, "disconnect"))
+			else if (strcmp(buf, "disconnect")==0)
 			{
 				if (WaitForSingleObject(arguments->map_mutex, INFINITE) == WAIT_OBJECT_0)
 				{
@@ -130,8 +124,10 @@ DWORD WINAPI client_thread(void* args)
 				free(arguments);
 				return 0;
 			}
-			else if (strcmp(buf, "ping"))
+			else if (strcmp(buf, "ping")==0)
 			{
+				strcpy(buf, "pong");
+				send(client_socket, buf, STRING_LENGTH, 0);
 				if (WaitForSingleObject(arguments->ready_mutex, INFINITE) == WAIT_OBJECT_0)
 				{
 					rd = 1;
@@ -207,6 +203,8 @@ DWORD WINAPI client_thread(void* args)
 			}
 			else if (strcmp(buf, "ping") == 0)
 			{
+				strcpy(buf, "pong");
+				send(client_socket, buf, STRING_LENGTH, 0);
 				strcpy(buf, "map");
 				send(client_socket, buf, STRING_LENGTH, 0);
 				char* data = (char*)malloc(SIZE_OF_DATA);
@@ -244,6 +242,11 @@ int main() {
 	for (int i = 0; i < NUMBER_OF_CLIENTS; i++) 
 	{
 		players[i].connected = 0;
+		strcpy(players[i].nick, " ");
+		players[i].ready = 0;
+		players[i].x = 0;
+		players[i].y = 0;
+		players[i].points = 0;
 	}
 	map.players = players;
 	WSADATA wsas;
