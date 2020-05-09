@@ -35,6 +35,8 @@ void serialize_map(char* data, Map_type* map)
 			position += sizeof(int);
 			memcpy(data + position, &(map->players[i].points), sizeof(int));
 			position += sizeof(int);
+			memcpy(data + position, &(map->players[i].connected), sizeof(int));
+			position += sizeof(int);
 	}
 }
 
@@ -161,6 +163,11 @@ DWORD WINAPI client_thread(void* args)
 			}
 		}
 	}
+	if (WaitForSingleObject(arguments->ready_mutex, INFINITE) == WAIT_OBJECT_0)
+	{
+		*(arguments->everybody_ready) = 0;
+	}
+	ReleaseMutex(arguments->ready_mutex);
 	while (!lost_client)
 	{
 		if (recv(client_socket, buf, STRING_LENGTH, 0) > 0)
@@ -205,16 +212,26 @@ DWORD WINAPI client_thread(void* args)
 			{
 				strcpy(buf, "pong");
 				send(client_socket, buf, STRING_LENGTH, 0);
-				strcpy(buf, "map");
+				strcpy(buf, "full_map");
 				send(client_socket, buf, STRING_LENGTH, 0);
 				char* data = (char*)malloc(SIZE_OF_DATA);
 				if (WaitForSingleObject(arguments->map_mutex, INFINITE) == WAIT_OBJECT_0)
 				{
-					serialize_map(data, arguments->map);
+					serialize_map_fully(data, arguments->map, arguments->everybody_ready);
 				}
 				ReleaseMutex(arguments->map_mutex);
 				send(client_socket, data, SIZE_OF_DATA, 0);
 				free(data);
+			}
+			else if (strcmp(buf, "disconnect")==0)
+			{
+				printf("Player number %d has left\n", player_number);
+				if (WaitForSingleObject(arguments->map_mutex, INFINITE) == WAIT_OBJECT_0)
+				{
+					arguments->map->players[player_number].connected=0;
+					arguments->map->players[player_number].ready=0;
+				}
+				ReleaseMutex(arguments->map_mutex);
 			}
 			else
 			{

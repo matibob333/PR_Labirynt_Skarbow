@@ -36,6 +36,8 @@ void deserialize_map(char* data, Map_type* map)
         position += sizeof(int);
         memcpy(&(map->players[i].points), data + position, sizeof(int));
         position += sizeof(int);
+        memcpy(&(map->players[i].connected), data + position, sizeof(int));
+        position += sizeof(int);
     }
 }
 
@@ -251,18 +253,12 @@ int initialize_players(Buttons_type buttons, SOCKET server, Map_type* map, SDL_p
                 break;
 			}
 		}
-        if (ready == 1)
-        {
-            latency = ping_and_receive(server, map, &everybody_ready);
-        }
-        else
-        {
-            latency = ping_and_receive(server, map, &everybody_ready);
-		}
+        latency = ping_and_receive(server, map, &everybody_ready);
         SDL_UpdateTexture(package.texture, NULL, package.screen->pixels, package.screen->pitch);
         //SDL_RenderClear(package.renderer);
         SDL_RenderCopy(package.renderer, package.texture, NULL, NULL);
         SDL_RenderPresent(package.renderer);
+        Sleep(16);
 	}
     return quit;
 }
@@ -272,15 +268,16 @@ void start_game(Buttons_type buttons, SOCKET server, Map_type* map, SDL_package_
     SDL_Event event;
     int is_running = 1;
     int latency;
+    int dummy;
     while(is_running)
     {
         SDL_FillRect(package.screen, NULL, package.color);
         char buf[STRING_LENGTH];
         for (int i = 0; i < NUMBER_OF_CLIENTS; i++)
         {
-            if (map->players[i].connected == 1)
+            if (map->players[i].connected == 1 && map->players[i].ready == 1)
             {
-                sprintf(buf, "Gracz numer %d", i);
+                sprintf(buf, "%s", map->players[i].nick);
                 draw_text(buf, 100 * i, 0, package);
                 sprintf(buf, "x: %d", map->players[i].x);
                 draw_text(buf, 100 * i, 20, package);
@@ -311,12 +308,13 @@ void start_game(Buttons_type buttons, SOCKET server, Map_type* map, SDL_package_
 				break;
 			};
 		};
-        latency = ping_and_receive(server, map, NULL);
+        latency = ping_and_receive(server, map, &dummy);
         //SDL_QueryTexture(texture, NULL, NULL, &texW, &texH);
         SDL_UpdateTexture(package.texture, NULL, package.screen->pixels, package.screen->pitch);
         //SDL_RenderClear(package.renderer);
         SDL_RenderCopy(package.renderer, package.texture, NULL, NULL);
         SDL_RenderPresent(package.renderer);
+        Sleep(16);
     }
 }
 
