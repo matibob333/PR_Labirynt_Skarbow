@@ -5,7 +5,7 @@
 #include<time.h>
 #include <SDL.h>
 #include <SDL_ttf.h>
-#include "../common/common_structures.h"
+#include "common_structures.h"
 #include "draw_functions.h"
 
 #pragma comment(lib, "Ws2_32.lib")
@@ -58,6 +58,7 @@ void deserialize_map_fully(char* data, Map_type* map, int *everybody_ready)
         memcpy(&nick_length, data + position, sizeof(int));
         position += sizeof(int);
         memcpy(map->players[i].nick, data + position, nick_length);
+        map->players[i].nick[nick_length] = '\0';
         position += nick_length;
     }
     memcpy(everybody_ready, data + position, sizeof(int));
@@ -229,20 +230,17 @@ int initialize_players(Buttons_type buttons, SOCKET server, Map_type* map, SDL_p
             case SDL_KEYDOWN:
                 if (event.key.keysym.sym == buttons.action)
                 {
-                    for (int i = 0; i < NUMBER_OF_CLIENTS;i++)
+                    if(ready==0)
                     {
-                        if(ready==0)
-                        {
-                            strcpy(buf, "ready");
-                            send(server, buf, STRING_LENGTH, 0);
-                            ready = 1;
-						}
-                        else
-                        {
-                            strcpy(buf, "not_ready");
-                            send(server, buf, STRING_LENGTH, 0);
-                            ready = 0;
-						}
+                        strcpy(buf, "ready");
+                        send(server, buf, STRING_LENGTH, 0);
+                        ready = 1;
+					}
+                    else
+                    {
+                        strcpy(buf, "not_ready");
+                        send(server, buf, STRING_LENGTH, 0);
+                        ready = 0;
 					}
 				} 
                 break;
@@ -253,7 +251,14 @@ int initialize_players(Buttons_type buttons, SOCKET server, Map_type* map, SDL_p
                 break;
 			}
 		}
-        latency = ping_and_receive(server, map, &everybody_ready);
+        if (ready == 1)
+        {
+            latency = ping_and_receive(server, map, &everybody_ready);
+        }
+        else
+        {
+            latency = ping_and_receive(server, map, &everybody_ready);
+		}
         SDL_UpdateTexture(package.texture, NULL, package.screen->pixels, package.screen->pitch);
         //SDL_RenderClear(package.renderer);
         SDL_RenderCopy(package.renderer, package.texture, NULL, NULL);
