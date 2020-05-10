@@ -114,7 +114,7 @@ void draw_labyrinth(SDL_package_type* package, Map_type* map)
 {
     for (int i = 0; i < map->size; i++)
     {
-        for (int j = 0; i < map->size; j++)
+        for (int j = 0; j < map->size; j++)
         {
             if (map->labyrinth[i][j] == 1)
             {

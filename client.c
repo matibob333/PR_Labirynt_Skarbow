@@ -16,7 +16,7 @@ void recive_labyrinth_from_server(SOCKET s, Map_type* map)
     map->labyrinth = (unsigned char**)malloc(map->size * sizeof(unsigned char*));
     for (int i = 0; i < map->size; i++)
     {
-        map->labyrinth = (unsigned char*)malloc(map->size * (sizeof(unsigned char)));
+        map->labyrinth[i] = (unsigned char*)malloc(map->size * (sizeof(unsigned char)));
         recv(s, map->labyrinth[i], map->size, 0);
     }
     free(int_holder);
