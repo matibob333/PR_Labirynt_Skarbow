@@ -306,7 +306,7 @@ int main()
 	map_mutex = CreateMutex(NULL, FALSE, NULL);
 	ready_mutex = CreateMutex(NULL, FALSE, NULL);
 	Map_type map;
-	read_BMP("Project_server\\Labirynt_skarbow_server\\Labirynt_skarbow_server\\cos.bmp", &map);
+	read_BMP("labirynt.bmp", &map);
 	int everybody_ready = 0;
 	Thread_args *thread_args;
 	Player_type players[NUMBER_OF_CLIENTS];
