@@ -1,14 +1,26 @@
 #define _CRT_SECURE_NO_WARNINGS
 
-#include<winsock.h>
 #include<stdio.h>
 #include<time.h>
 #include <SDL.h>
 #include <SDL_ttf.h>
-#include "common_structures.h"
 #include "draw_functions.h"
 
 #pragma comment(lib, "Ws2_32.lib")
+
+void recive_labyrinth_from_server(SOCKET s, Map_type* map)
+{
+    char* int_holder = (char*)malloc(sizeof(int));
+    recv(s, int_holder, sizeof(int), 0);
+    memcpy(&(map->size), int_holder, sizeof(int));
+    map->labyrinth = (unsigned char**)malloc(map->size * sizeof(unsigned char*));
+    for (int i = 0; i < map->size; i++)
+    {
+        map->labyrinth = (unsigned char*)malloc(map->size * (sizeof(unsigned char)));
+        recv(s, map->labyrinth[i], map->size, 0);
+    }
+    free(int_holder);
+}
 
 typedef struct Buttons_type
 {
@@ -171,7 +183,7 @@ void load_nickname(SDL_package_type package, char* nick)
     }
 }
 
-SOCKET connect_to_server(const char* address, char* nick)
+SOCKET connect_to_server(const char* address, char* nick, Map_type* map)
 {
     SOCKET s;
     struct sockaddr_in sa;
@@ -197,10 +209,10 @@ SOCKET connect_to_server(const char* address, char* nick)
         send(s, buf, STRING_LENGTH, 0);
         strcpy(buf, nick);
         send(s, buf, STRING_LENGTH, 0);
+        recive_labyrinth_from_server(s,map);
         return s;
     }
 }
-
 int initialize_players(Buttons_type buttons, SOCKET server, Map_type* map, SDL_package_type package)
 {
     char buf[STRING_LENGTH];
@@ -272,19 +284,7 @@ void start_game(Buttons_type buttons, SOCKET server, Map_type* map, SDL_package_
     while(is_running)
     {
         SDL_FillRect(package.screen, NULL, package.color);
-        char buf[STRING_LENGTH];
-        for (int i = 0; i < NUMBER_OF_CLIENTS; i++)
-        {
-            if (map->players[i].connected == 1 && map->players[i].ready == 1)
-            {
-                sprintf(buf, "%s", map->players[i].nick);
-                draw_text(buf, 100 * i, 0, package);
-                sprintf(buf, "x: %d", map->players[i].x);
-                draw_text(buf, 100 * i, 20, package);
-                sprintf(buf, "y: %d", map->players[i].y);
-                draw_text(buf, 100 * i, 40, package);
-            }
-        }
+        draw_map(&package, map);
         while (SDL_PollEvent(&event)) {
 			switch (event.type) {
 			case SDL_KEYDOWN:
@@ -418,7 +418,7 @@ int main(int argc, char** argv)
     Buttons_type buttons_set = set_buttons(package);
     if(buttons_set.up != SDLK_0)
     {
-        server = connect_to_server(LOCALHOST, nick);
+        server = connect_to_server(LOCALHOST, nick, map);
         if(initialize_players(buttons_set, server, map, package) == 0)
         {
             start_game(buttons_set, server, map, package);

@@ -1,8 +1,9 @@
 #define NUMBER_OF_CLIENTS 4
-#define PORT 420
+#define PORT 7777
 #define SIZE_OF_DATA 1024
 #define STRING_LENGTH 20
 #define LOCALHOST "127.0.0.1"
+#include<winsock.h>
 
 //struktura danych gracza
 typedef struct Player_type
@@ -30,4 +31,6 @@ typedef struct Map_type
 	int size;
 	//tablica graczy
 	Player_type* players;
+	//dane labiryntu
+	unsigned char** labyrinth;
 }Map_type;
