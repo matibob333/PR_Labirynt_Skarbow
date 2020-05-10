@@ -3,7 +3,7 @@
 #include<windows.h>
 #include<stdio.h>
 #include<time.h>
-#include "common_structures.h"
+#include "../../../common/common_structures.h"
 
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -21,6 +21,57 @@ typedef struct Thread_args
 	//uchwyt mutexa gotowoœci graczy
 	HANDLE ready_mutex;
 }Thread_args;
+
+void send_labyrinth_to_client(SOCKET client, Map_type* map)
+{
+	char* int_holder = (char*)malloc(sizeof(int));
+	memcpy(int_holder, &(map->size), sizeof(int));
+	send(client, int_holder, sizeof(int), 0);
+	for(int i=0;i<map->size;i++)
+	{
+		send(client, map->labyrinth[i], map->size, 0);
+	}
+	free(int_holder);
+}
+
+void read_BMP(char* filename, Map_type* map)
+{
+    FILE* f = fopen(filename, "rb");
+
+    if(f == NULL)
+        return;
+
+    unsigned char info[54];
+    fread(info, sizeof(unsigned char), 54, f); // read the 54-byte header
+
+    // extract image height and width from header
+    map->size = *(int*)&info[18];
+
+    int row_padded = (map->size*3 + 3) & (~3);
+	unsigned char** data = (char**)malloc(map->size * sizeof(unsigned char*));
+	unsigned char* raw_pixel_data = (unsigned char*)malloc(row_padded * sizeof(unsigned char));
+
+    for(int i = map->size-1; i >= 0; i--)
+    {
+		data[i] = (char*)malloc(map->size * sizeof(unsigned char));
+        fread(raw_pixel_data, sizeof(unsigned char), row_padded, f);
+        for(int j = 0; j < map->size*3; j += 3)
+        {
+            // Convert (B, G, R) to (R, G, B)
+            if(((int)raw_pixel_data[j] + (int)raw_pixel_data[j+1] + (int)raw_pixel_data[j+2])/3 < 128)
+			{
+				data[i][j / 3] = 0;
+			}
+			else
+			{
+				data[i][j / 3] = 1;
+			}
+        }
+    }
+	free(raw_pixel_data);
+    fclose(f);
+	map->labyrinth = data;
+}
 
 //serializacja danych z mapy do tablicy bajtów w celu przes³ania
 void serialize_map(char* data, Map_type* map)
@@ -95,6 +146,7 @@ DWORD WINAPI client_thread(void* args)
 					strcpy(arguments->map->players[player_number].nick, buf);
 				}
 				ReleaseMutex(arguments->map_mutex);
+				send_labyrinth_to_client(client_socket, arguments->map);
 			}
 			//gracz zg³asza gotowoœæ
 			else if (strcmp(buf, "ready")==0)
@@ -248,11 +300,13 @@ DWORD WINAPI client_thread(void* args)
 	return 0;
 }
 
-int main() {
+int main()
+{
 	HANDLE map_mutex, ready_mutex;
 	map_mutex = CreateMutex(NULL, FALSE, NULL);
 	ready_mutex = CreateMutex(NULL, FALSE, NULL);
 	Map_type map;
+	read_BMP("Project_server\\Labirynt_skarbow_server\\Labirynt_skarbow_server\\cos.bmp", &map);
 	int everybody_ready = 0;
 	Thread_args *thread_args;
 	Player_type players[NUMBER_OF_CLIENTS];
@@ -315,6 +369,7 @@ int main() {
 		thread_args->map = &map;
 		CreateThread(NULL, 0, client_thread, (void*)thread_args,0, &id);
 	}
+	free(map.labyrinth);
 	closesocket(si);
 	WSACleanup();
 	return 0;

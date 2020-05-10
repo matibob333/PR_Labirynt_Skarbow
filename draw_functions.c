@@ -13,7 +13,7 @@ int initialize_package(SDL_package_type *package)
 {
 	package->foregroundColor = (SDL_Color){ 255, 255, 255 };
     package->backgroundColor = (SDL_Color){ 0, 0, 255 };
-	package->font  = TTF_OpenFont("fonts/Lato-Regular.ttf", FONT_SIZE);
+	package->font  = TTF_OpenFont("open-sans/OpenSans-Bold.ttf", FONT_SIZE);
 	if (SDL_Init(SDL_INIT_EVERYTHING) != 0) {
         printf("SDL init error! Code: %s\n", SDL_GetError());
         return 1;
@@ -56,5 +56,94 @@ int initialize_package(SDL_package_type *package)
         return 1;
     }
     package->color = SDL_MapRGB(package->screen->format, 0x00, 0x00, 0x00);
+    package->wall = SDL_LoadBMP("textures/wall.bmp");
+    if (package->wall == NULL)
+    {
+        SDL_DestroyRenderer(package->renderer);
+        SDL_DestroyWindow(package->win);
+        printf("Wall creation error\n");
+        SDL_Quit();
+        return 1;
+    }
+    package->floor = SDL_LoadBMP("textures/free_space.bmp");
+    if (package->floor == NULL)
+    {
+        SDL_DestroyRenderer(package->renderer);
+        SDL_DestroyWindow(package->win);
+        printf("Floor creation error\n");
+        SDL_Quit();
+        return 1;
+    }
+    package->chest = SDL_LoadBMP("textures/chest.bmp");
+    if (package->chest == NULL)
+    {
+        SDL_DestroyRenderer(package->renderer);
+        SDL_DestroyWindow(package->win);
+        printf("Chest creation error\n");
+        SDL_Quit();
+        return 1;
+    }
+   
+    package->player_surfs[0] = SDL_LoadBMP("textures/player_blue.bmp");
+    package->player_surfs[1] = SDL_LoadBMP("textures/player_green.bmp");
+    package->player_surfs[2] = SDL_LoadBMP("textures/player_red.bmp");
+    package->player_surfs[3] = SDL_LoadBMP("textures/player_yellow.bmp");
+  
+    for (int i = 0; i < NUMBER_OF_CLIENTS; i++) 
+    {
+        if (package->player_surfs[i] == NULL) 
+        {
+            SDL_DestroyRenderer(package->renderer);
+            SDL_DestroyWindow(package->win);
+            printf("Player creation error\n");
+            SDL_Quit();
+            return 1;
+        }
+    }
+
     return 0;
+}
+
+void draw_surface(SDL_package_type* package, SDL_Surface* surface, int x, int y)
+{
+	SDL_Rect dstrect = (SDL_Rect){ x-(surface->w/2), y-(surface->h/2), surface->w, surface->h };
+	SDL_BlitSurface(surface, NULL, package->screen, &dstrect);
+}
+
+void draw_labyrinth(SDL_package_type* package, Map_type* map)
+{
+    for (int i = 0; i < map->size; i++)
+    {
+        for (int j = 0; i < map->size; j++)
+        {
+            if (map->labyrinth[i][j] == 1)
+            {
+                draw_surface(package, package->floor,16*i, 16*j);
+            }
+            else
+            {
+                draw_surface(package, package->wall, 16 * i, 16 * j);
+            }
+        }
+    }
+}
+void draw_players(SDL_package_type* package, Map_type* map)
+{
+    for (int i = 0; i < NUMBER_OF_CLIENTS; i++)
+    {
+        if (map->players[i].connected == 1 && map->players[i].ready == 1) 
+        {
+            draw_surface(package, package->player_surfs[i], map->players[i].x, map->players[i].y );
+        }
+    }
+}
+void draw_chests(SDL_package_type* package, Map_type* map)
+{
+    // TO DO
+}
+void draw_map(SDL_package_type* package, Map_type* map)
+{
+    draw_labyrinth(package, map);
+    draw_players(package, map);
+    draw_chests(package, map);
 }
