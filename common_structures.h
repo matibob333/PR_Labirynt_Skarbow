@@ -1,10 +1,11 @@
 #define NUMBER_OF_CLIENTS 4
 #define PORT 7777
-#define SIZE_OF_DATA 1024
+#define SIZE_OF_DATA 2048
 #define STRING_LENGTH 20
 #define SPEED 4
 #define TEXTURE_SIZE 16
 #define LOCALHOST "127.0.0.1"
+#define NUMBER_OF_TREASURES 16
 #include<winsock.h>
 
 //struktura danych gracza
@@ -24,6 +25,10 @@ typedef struct Player_type
 	SOCKET socket;
 	//czy gracz jest połączony
 	int connected;
+	// skarby zebrane przez gracza
+	int treasures[NUMBER_OF_TREASURES];
+	// najważniejszy skarb gracza
+	int important_treasure;
 }Player_type;
 
 //struktura mapy

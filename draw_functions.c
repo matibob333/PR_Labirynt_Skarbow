@@ -116,13 +116,13 @@ void draw_labyrinth(SDL_package_type* package, Map_type* map)
     {
         for (int j = 0; j < map->size; j++)
         {
-            if (map->labyrinth[i][j] == 1)
+            if (map->labyrinth[i][j] == 0)
             {
-                draw_surface(package, package->floor,TEXTURE_SIZE*j, TEXTURE_SIZE*i);
+                draw_surface(package, package->wall,TEXTURE_SIZE*j, TEXTURE_SIZE*i);
             }
             else
             {
-                draw_surface(package, package->wall, TEXTURE_SIZE * j, TEXTURE_SIZE * i);
+                draw_surface(package, package->floor, TEXTURE_SIZE * j, TEXTURE_SIZE * i);
             }
         }
     }
@@ -139,12 +139,20 @@ void draw_players(SDL_package_type* package, Map_type* map)
 }
 void draw_chests(SDL_package_type* package, Map_type* map)
 {
-    // TO DO
+    for (int i = 0; i < map->size; i++)
+    {
+        for (int j = 0; j < map->size; j++)
+        {
+            if (map->labyrinth[i][j] >= NUMBER_OF_TREASURES && map->labyrinth[i][j] < 2*NUMBER_OF_TREASURES)
+            {
+                draw_surface(package, package->chest,TEXTURE_SIZE*j, TEXTURE_SIZE*i);
+            }
+        }
+    }
 }
 void draw_map(SDL_package_type* package, Map_type* map)
 {
     draw_labyrinth(package, map);
-    draw_players(package, map);
     draw_chests(package, map);
-
+    draw_players(package, map);
 }

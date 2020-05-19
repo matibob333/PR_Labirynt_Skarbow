@@ -72,6 +72,20 @@ void read_BMP(char* filename, Map_type* map)
     fclose(f);
 	map->labyrinth = data;
 }
+void set_treasures(Map_type* map)
+{
+	int x_random, y_random;
+	for(int i=0;i<NUMBER_OF_TREASURES;i++)
+	{
+		do
+		{
+			x_random = rand() % map->size;
+			y_random = rand() % map->size;
+
+		} while (map->labyrinth[x_random][y_random] == 0 || (map->labyrinth[x_random][y_random] >= NUMBER_OF_TREASURES && map->labyrinth[x_random][y_random] < 2 * NUMBER_OF_TREASURES));
+		map->labyrinth[x_random][y_random] = NUMBER_OF_TREASURES + i;
+	}
+}
 
 //serializacja danych z mapy do tablicy bajtów w celu przes³ania
 void serialize_map(char* data, Map_type* map)
@@ -112,10 +126,31 @@ void serialize_map_fully(char* data, Map_type* map, int *everybody_ready, int *p
 		position += sizeof(int);
 		memcpy(data + position, map->players[i].nick, length);
 		position += length;
+		for(int j=0;j<NUMBER_OF_TREASURES;j++)
+		{
+			memcpy(data+position, &(map->players[i].treasures[j]), sizeof(int));
+			position+=sizeof(int);
+		}
+	}
+	for(int j=0;j<map->size;j++)
+	{
+		for(int k=0;k<map->size;k++)
+		{
+			memcpy(data+position, &(map->labyrinth[j][k]), sizeof(unsigned char));
+			position+=sizeof(unsigned char);
+		}
 	}
 	memcpy(data + position, everybody_ready, sizeof(int));
 	position += sizeof(int);
 	memcpy(data + position, player_number, sizeof(int));
+}
+
+void send_important_treasure_id_to_client(SOCKET s, int id)
+{
+	char* int_holder = (char*)malloc(sizeof(int));
+	memcpy(int_holder, &id, sizeof(int));
+	send(s, int_holder, sizeof(int), 0);
+	free(int_holder); 
 }
 
 DWORD WINAPI client_thread(void* args)
@@ -153,6 +188,7 @@ DWORD WINAPI client_thread(void* args)
 				}
 				ReleaseMutex(arguments->map_mutex);
 				send_labyrinth_to_client(client_socket, arguments->map);
+				send_important_treasure_id_to_client(client_socket, arguments->map->players[player_number].important_treasure);
 			}
 			//gracz zg³asza gotowoœæ
 			else if (strcmp(buf, "ready")==0)
@@ -281,6 +317,26 @@ DWORD WINAPI client_thread(void* args)
 				send(client_socket, data, SIZE_OF_DATA, 0);
 				free(data);
 			}
+			else if (strcmp(buf, "chest")==0)
+			{
+				int left = arguments->map->players[player_number].x/TEXTURE_SIZE;
+				int top = arguments->map->players[player_number].y/TEXTURE_SIZE;
+				int right = (arguments->map->players[player_number].x+TEXTURE_SIZE-1)/TEXTURE_SIZE;
+				int bottom = (arguments->map->players[player_number].y+TEXTURE_SIZE-1)/TEXTURE_SIZE;
+				for(int i=NUMBER_OF_TREASURES;i<2*NUMBER_OF_TREASURES;i++)
+				{
+					if (WaitForSingleObject(arguments->map_mutex, INFINITE) == WAIT_OBJECT_0)
+					{
+						if (left == right && top == bottom && arguments->map->labyrinth[top][left] == i)
+						{
+							int chest_index = i - NUMBER_OF_TREASURES;
+							arguments->map->players[player_number].treasures[chest_index] = 1;
+							arguments->map->labyrinth[top][left] = 1;
+						}
+					}
+					ReleaseMutex(arguments->map_mutex);
+				}
+			}
 			else if (strcmp(buf, "disconnect")==0)
 			{
 				printf("Player number %d has left\n", player_number);
@@ -308,11 +364,13 @@ DWORD WINAPI client_thread(void* args)
 
 int main()
 {
+	srand(time(NULL) * GetCurrentThreadId());	
 	HANDLE map_mutex, ready_mutex;
 	map_mutex = CreateMutex(NULL, FALSE, NULL);
 	ready_mutex = CreateMutex(NULL, FALSE, NULL);
 	Map_type map;
-	read_BMP("lab2.bmp", &map);
+	read_BMP("labyrinth.bmp", &map);
+	set_treasures(&map);
 	int everybody_ready = 0;
 	Thread_args *thread_args;
 	Player_type players[NUMBER_OF_CLIENTS];
@@ -324,6 +382,24 @@ int main()
 		players[i].x = 0;
 		players[i].y = 0;
 		players[i].points = 0;
+		int continue_drawing = 0;
+		do
+		{
+			continue_drawing = 0;
+			players[i].important_treasure = rand() % NUMBER_OF_TREASURES;
+			for(int j=0; j < i; j++)
+			{
+				if (players[i].important_treasure == players[j].important_treasure)
+				{
+					continue_drawing = 1;
+				}
+			}
+		} while (continue_drawing);
+		for (int j = 0; j < NUMBER_OF_TREASURES; j++)
+		{
+			players[i].treasures[j] = 0;
+		}
+
 	}
 	map.players = players;
 	WSADATA wsas;

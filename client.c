@@ -75,7 +75,20 @@ void deserialize_map_fully(char* data, Map_type* map, int *everybody_ready, int*
         memcpy(map->players[i].nick, data + position, nick_length);
         map->players[i].nick[nick_length] = '\0';
         position += nick_length;
+        for(int j=0;j<NUMBER_OF_TREASURES;j++)
+		{
+			memcpy(&(map->players[i].treasures[j]), data+position, sizeof(int));
+			position+=sizeof(int);
+		}
     }
+    for(int j=0;j<map->size;j++)
+	{
+		for(int k=0;k<map->size;k++)
+		{
+            memcpy(&(map->labyrinth[j][k]), data+position, sizeof(unsigned char));
+			position+=sizeof(unsigned char);
+		}
+	}
     memcpy(everybody_ready, data + position, sizeof(int));
     position += sizeof(int);
     memcpy(player_number, data + position, sizeof(int));
@@ -186,7 +199,15 @@ void load_nickname(SDL_package_type package, char* nick)
     }
 }
 
-SOCKET connect_to_server(const char* address, char* nick, Map_type* map)
+void receive_important_treasure_id_from_server(SOCKET s, int *important_treasure)
+{
+    char* int_holder = (char*)malloc(sizeof(int));
+    recv(s, int_holder, sizeof(int), 0);
+    memcpy(important_treasure, int_holder, sizeof(int));
+    free(int_holder);
+}
+
+SOCKET connect_to_server(const char* address, char* nick, Map_type* map, int *important_treasure)
 {
     SOCKET s;
     struct sockaddr_in sa;
@@ -213,10 +234,11 @@ SOCKET connect_to_server(const char* address, char* nick, Map_type* map)
         strcpy(buf, nick);
         send(s, buf, STRING_LENGTH, 0);
         recive_labyrinth_from_server(s,map);
+        receive_important_treasure_id_from_server(s, important_treasure);
         return s;
     }
 }
-int initialize_players(Buttons_type buttons, SOCKET server, Map_type* map, SDL_package_type package)
+int initialize_players(Buttons_type buttons, SOCKET server, Map_type* map, SDL_package_type package, int important_treasure)
 {
     char buf[STRING_LENGTH];
     int latency;
@@ -225,6 +247,7 @@ int initialize_players(Buttons_type buttons, SOCKET server, Map_type* map, SDL_p
     int everybody_ready = 0;
     int quit = 0;
     int player_number;
+    char treasure_name[20];
     while(!everybody_ready && !quit)
     {
         SDL_FillRect(package.screen, NULL, package.color);
@@ -240,6 +263,8 @@ int initialize_players(Buttons_type buttons, SOCKET server, Map_type* map, SDL_p
                 draw_text(map->players[i].nick, 100, 100 + 20 * i, package);
             }
         }
+        sprintf(treasure_name, "twoj skarb: %d", important_treasure);
+        draw_text(treasure_name, 100, 300, package);
         package.foregroundColor = (SDL_Color){ 255, 255, 255 };
         while (SDL_PollEvent(&event))
         {
@@ -250,14 +275,12 @@ int initialize_players(Buttons_type buttons, SOCKET server, Map_type* map, SDL_p
                 {
                     if(ready==0)
                     {
-                        strcpy(buf, "ready");
-                        send(server, buf, STRING_LENGTH, 0);
+                        send_key_to_server(server, "ready");
                         ready = 1;
 					}
                     else
                     {
-                        strcpy(buf, "not_ready");
-                        send(server, buf, STRING_LENGTH, 0);
+                        send_key_to_server(server, "not_ready");
                         ready = 0;
 					}
 				} 
@@ -289,6 +312,7 @@ void make_proper_move(SOCKET server, Map_type* map, int player_number, const cha
     int border_vertical;
     int vertical_border;
     int horizontal_border;
+    
     if(strcmp(command,"up")==0)
     {
         delta_vertical = -SPEED;
@@ -327,13 +351,23 @@ void make_proper_move(SOCKET server, Map_type* map, int player_number, const cha
         horizontal = (map->players[player_number].x + delta_horizontal)/ TEXTURE_SIZE;
         vertical_border = ((map->players[player_number].y + delta_vertical + border_vertical) / TEXTURE_SIZE);
         horizontal_border = ((map->players[player_number].x + delta_horizontal + border_horizontal) / TEXTURE_SIZE);
-        if(map->labyrinth[vertical][horizontal]==1 && map->labyrinth[vertical_border][horizontal_border] == 1)
+        if (map->labyrinth[vertical][horizontal] != 0 && map->labyrinth[vertical_border][horizontal_border] != 0)
         {
-            send_key_to_server(server, command);
+            if ((map->labyrinth[vertical][horizontal] >= NUMBER_OF_TREASURES && map->labyrinth[vertical][horizontal] <= 2 * NUMBER_OF_TREASURES - 1) || (map->labyrinth[vertical_border][horizontal_border] >= NUMBER_OF_TREASURES && map->labyrinth[vertical_border][horizontal_border] <= 2 * NUMBER_OF_TREASURES - 1))
+            {
+                send_key_to_server(server, command);
+                send_key_to_server(server, "chest");
+            }
+            else
+            {
+                send_key_to_server(server, command);
+            }
 		}
+
 	}
 
 }
+
 void start_game(Buttons_type buttons, SOCKET server, Map_type* map, SDL_package_type package)
 {
     SDL_Event event;
@@ -482,12 +516,13 @@ int main(int argc, char** argv)
         return 1;
     }
     char* nick = (char*)malloc(STRING_LENGTH); 
+    int important_treasure = -1;
     load_nickname(package, nick);
     Buttons_type buttons_set = set_buttons(package);
     if(buttons_set.up != SDLK_0)
     {
-        server = connect_to_server(LOCALHOST, nick, map);
-        if(initialize_players(buttons_set, server, map, package) == 0)
+        server = connect_to_server(LOCALHOST, nick, map, &important_treasure);
+        if(initialize_players(buttons_set, server, map, package, important_treasure) == 0)
         {
             start_game(buttons_set, server, map, package);
         }
