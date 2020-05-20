@@ -82,8 +82,8 @@ void set_treasures(Map_type* map)
 			x_random = rand() % map->size;
 			y_random = rand() % map->size;
 
-		} while (map->labyrinth[x_random][y_random] == 0 || (map->labyrinth[x_random][y_random] >= NUMBER_OF_TREASURES && map->labyrinth[x_random][y_random] < 2 * NUMBER_OF_TREASURES));
-		map->labyrinth[x_random][y_random] = NUMBER_OF_TREASURES + i;
+		} while (map->labyrinth[x_random][y_random] == 0 || (map->labyrinth[x_random][y_random] >= TREASURE_OFFSET && map->labyrinth[x_random][y_random] < TREASURE_OFFSET + NUMBER_OF_TREASURES));
+		map->labyrinth[x_random][y_random] = TREASURE_OFFSET + i;
 	}
 }
 
@@ -131,6 +131,8 @@ void serialize_map_fully(char* data, Map_type* map, int *everybody_ready, int *p
 			memcpy(data+position, &(map->players[i].treasures[j]), sizeof(int));
 			position+=sizeof(int);
 		}
+		memcpy(data + position, &(map->players[i].skill), sizeof(int));
+		position += sizeof(int);
 	}
 	for(int j=0;j<map->size;j++)
 	{
@@ -151,6 +153,41 @@ void send_important_treasure_id_to_client(SOCKET s, int id)
 	memcpy(int_holder, &id, sizeof(int));
 	send(s, int_holder, sizeof(int), 0);
 	free(int_holder); 
+}
+
+DWORD WINAPI skills_thread(void* args)
+{
+	Thread_args* arguments = (Thread_args*)args;
+	int max_skills_number = 7;
+	int result;
+	printf("Uruchomiono watek umiejetnosci\n");
+	while (!(*(arguments->everybody_ready)))
+	{
+		Sleep(1000);
+	}
+	printf("Watek umiejetnosci zaczyna\n");
+	while (*(arguments->everybody_ready))
+	{
+		Sleep(4000);
+		int x, y, skill_id;
+		do
+		{
+			x = rand() % arguments->map->size;
+			y = rand() % arguments->map->size;
+		} while (arguments->map->labyrinth[y][x] != 1 );
+		skill_id = rand() % NUMBER_OF_SKILLS;
+		if(WaitForSingleObject(arguments->map_mutex, INFINITE) == WAIT_OBJECT_0)
+		{
+			printf("Dodano umiejetnosc\n");
+			if (arguments->map->skills_number<= max_skills_number)
+			{
+				arguments->map->labyrinth[y][x] = SKILL_OFFSET + skill_id;
+				arguments->map->skills_number++;
+				printf("Dodano umiejetnosc\n");
+			}
+		}
+		ReleaseMutex(arguments->map_mutex);
+	}
 }
 
 DWORD WINAPI client_thread(void* args)
@@ -257,10 +294,6 @@ DWORD WINAPI client_thread(void* args)
 			}
 		}
 	}
-	if (WaitForSingleObject(arguments->ready_mutex, INFINITE) == WAIT_OBJECT_0)
-	{
-		*(arguments->everybody_ready) = 0;
-	}
 	ReleaseMutex(arguments->ready_mutex);
 	while (!lost_client)
 	{
@@ -323,16 +356,47 @@ DWORD WINAPI client_thread(void* args)
 				int top = arguments->map->players[player_number].y/TEXTURE_SIZE;
 				int right = (arguments->map->players[player_number].x+TEXTURE_SIZE-1)/TEXTURE_SIZE;
 				int bottom = (arguments->map->players[player_number].y+TEXTURE_SIZE-1)/TEXTURE_SIZE;
-				for(int i=NUMBER_OF_TREASURES;i<2*NUMBER_OF_TREASURES;i++)
+				int chest_index;
+				for(int i=TREASURE_OFFSET;i<TREASURE_OFFSET+NUMBER_OF_TREASURES;i++)
 				{
 					if (WaitForSingleObject(arguments->map_mutex, INFINITE) == WAIT_OBJECT_0)
 					{
 						if (left == right && top == bottom && arguments->map->labyrinth[top][left] == i)
 						{
-							int chest_index = i - NUMBER_OF_TREASURES;
+							chest_index = i - TREASURE_OFFSET;
 							arguments->map->players[player_number].treasures[chest_index] = 1;
 							arguments->map->labyrinth[top][left] = 1;
-						}
+							if (chest_index == arguments->map->players[player_number].important_treasure)
+							{
+								arguments->map->players[player_number].points += 100;
+							}
+							else
+							{
+								arguments->map->players[player_number].points += 20;
+							}
+						} 
+					}
+					ReleaseMutex(arguments->map_mutex);
+				}
+			}
+			else if (strcmp(buf, "get_skill")==0)
+			{
+				int left = arguments->map->players[player_number].x/TEXTURE_SIZE;
+				int top = arguments->map->players[player_number].y/TEXTURE_SIZE;
+				int right = (arguments->map->players[player_number].x+TEXTURE_SIZE-1)/TEXTURE_SIZE;
+				int bottom = (arguments->map->players[player_number].y+TEXTURE_SIZE-1)/TEXTURE_SIZE;
+				int skill_index;
+				for(int i=SKILL_OFFSET;i<SKILL_OFFSET+NUMBER_OF_SKILLS;i++)
+				{
+					if (WaitForSingleObject(arguments->map_mutex, INFINITE) == WAIT_OBJECT_0)
+					{
+						if (left == right && top == bottom && arguments->map->labyrinth[top][left] == i)
+						{
+							skill_index = i - SKILL_OFFSET;
+							arguments->map->players[player_number].skill = skill_index;
+							arguments->map->labyrinth[top][left] = 1;
+							arguments->map->skills_number--;
+						} 
 					}
 					ReleaseMutex(arguments->map_mutex);
 				}
@@ -371,6 +435,7 @@ int main()
 	Map_type map;
 	read_BMP("labyrinth.bmp", &map);
 	set_treasures(&map);
+	map.skills_number = 0;
 	int everybody_ready = 0;
 	Thread_args *thread_args;
 	Player_type players[NUMBER_OF_CLIENTS];
@@ -382,6 +447,7 @@ int main()
 		players[i].x = 0;
 		players[i].y = 0;
 		players[i].points = 0;
+		players[i].skill = -1;
 		int continue_drawing = 0;
 		do
 		{
@@ -429,6 +495,12 @@ int main()
 	int lenc;
 	char buf[STRING_LENGTH] = "PONG";
 	DWORD id;
+	thread_args = (Thread_args*)malloc(sizeof(Thread_args));
+	thread_args->everybody_ready = &everybody_ready;
+	thread_args->map_mutex = map_mutex;
+	thread_args->ready_mutex = ready_mutex;
+	thread_args->map = &map;
+	CreateThread(NULL, 0, skills_thread, (void*)thread_args, 0, &id);
 	while (1)
 	{
 		lenc = sizeof(sc);

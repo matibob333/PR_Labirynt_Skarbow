@@ -80,6 +80,8 @@ void deserialize_map_fully(char* data, Map_type* map, int *everybody_ready, int*
 			memcpy(&(map->players[i].treasures[j]), data+position, sizeof(int));
 			position+=sizeof(int);
 		}
+        memcpy(&(map->players[i].skill), data + position, sizeof(int));
+        position += sizeof(int);
     }
     for(int j=0;j<map->size;j++)
 	{
@@ -164,14 +166,15 @@ int ping_and_receive(SOCKET s, Map_type* map, int *everybody_ready, int* player_
     return latency;
 }
 
-void load_nickname(SDL_package_type package, char* nick) 
+int load_nickname(SDL_package_type package, char* nick) 
 {
     SDL_bool done = SDL_FALSE;
     SDL_Event event;
     char text[128];
     sprintf(text, "Podaj swoj nick: ");
     sprintf(nick, "\0");
-    while (!done)
+    int quit = 0;
+    while (!done && !quit)
     {
         SDL_FillRect(package.screen, NULL, package.color);
         draw_text(nick, 100, 100, package);
@@ -189,7 +192,9 @@ void load_nickname(SDL_package_type package, char* nick)
             case SDL_TEXTINPUT:
                 strcat(nick, event.text.text); //wczytywanie nicku
                 break;
-
+            case SDL_QUIT:
+                quit = 1;
+                break;
             }
         }
         SDL_UpdateTexture(package.texture, NULL, package.screen->pixels, package.screen->pitch);
@@ -197,6 +202,7 @@ void load_nickname(SDL_package_type package, char* nick)
         SDL_RenderCopy(package.renderer, package.texture, NULL, NULL);
         SDL_RenderPresent(package.renderer);
     }
+    return quit;
 }
 
 void receive_important_treasure_id_from_server(SOCKET s, int *important_treasure)
@@ -353,11 +359,16 @@ void make_proper_move(SOCKET server, Map_type* map, int player_number, const cha
         horizontal_border = ((map->players[player_number].x + delta_horizontal + border_horizontal) / TEXTURE_SIZE);
         if (map->labyrinth[vertical][horizontal] != 0 && map->labyrinth[vertical_border][horizontal_border] != 0)
         {
-            if ((map->labyrinth[vertical][horizontal] >= NUMBER_OF_TREASURES && map->labyrinth[vertical][horizontal] <= 2 * NUMBER_OF_TREASURES - 1) || (map->labyrinth[vertical_border][horizontal_border] >= NUMBER_OF_TREASURES && map->labyrinth[vertical_border][horizontal_border] <= 2 * NUMBER_OF_TREASURES - 1))
+            if ((map->labyrinth[vertical][horizontal] >= TREASURE_OFFSET && map->labyrinth[vertical][horizontal] < TREASURE_OFFSET + NUMBER_OF_TREASURES) || (map->labyrinth[vertical_border][horizontal_border] >= TREASURE_OFFSET && map->labyrinth[vertical_border][horizontal_border] < TREASURE_OFFSET + NUMBER_OF_TREASURES))
             {
                 send_key_to_server(server, command);
                 send_key_to_server(server, "chest");
             }
+            else if((map->labyrinth[vertical][horizontal] >= SKILL_OFFSET && map->labyrinth[vertical][horizontal] < SKILL_OFFSET + NUMBER_OF_SKILLS) || (map->labyrinth[vertical_border][horizontal_border] >= SKILL_OFFSET && map->labyrinth[vertical_border][horizontal_border] < SKILL_OFFSET + NUMBER_OF_SKILLS))
+            {
+                send_key_to_server(server, command);
+                send_key_to_server(server, "get_skill");
+			}
             else
             {
                 send_key_to_server(server, command);
@@ -517,7 +528,16 @@ int main(int argc, char** argv)
     }
     char* nick = (char*)malloc(STRING_LENGTH); 
     int important_treasure = -1;
-    load_nickname(package, nick);
+    int quit = load_nickname(package, nick);
+    if(quit)
+    {
+        SDL_FreeSurface(package.screen);
+        SDL_DestroyTexture(package.texture);
+        SDL_DestroyRenderer(package.renderer);
+        SDL_DestroyWindow(package.win);
+        SDL_Quit();
+	    return 0;
+	}
     Buttons_type buttons_set = set_buttons(package);
     if(buttons_set.up != SDLK_0)
     {

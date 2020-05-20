@@ -13,6 +13,10 @@ int initialize_package(SDL_package_type *package)
 {
 	package->foregroundColor = (SDL_Color){ 255, 255, 255 };
     package->backgroundColor = (SDL_Color){ 0, 0, 255 };
+    package->player_colors[0] = (SDL_Color){ 255, 255, 0 };
+    package->player_colors[1] = (SDL_Color){ 255, 0, 0 };
+    package->player_colors[2] = (SDL_Color){ 0, 0, 255 };
+    package->player_colors[3] = (SDL_Color){ 0, 255, 0 };
 	package->font  = TTF_OpenFont("open-sans/OpenSans-Bold.ttf", FONT_SIZE);
 	if (SDL_Init(SDL_INIT_EVERYTHING) != 0) {
         printf("SDL init error! Code: %s\n", SDL_GetError());
@@ -83,6 +87,15 @@ int initialize_package(SDL_package_type *package)
         SDL_Quit();
         return 1;
     }
+    package->skill = SDL_LoadBMP("textures/skill.bmp");
+    if (package->skill == NULL)
+    {
+        SDL_DestroyRenderer(package->renderer);
+        SDL_DestroyWindow(package->win);
+        printf("Chest creation error\n");
+        SDL_Quit();
+        return 1;
+    }
    
     package->player_surfs[0] = SDL_LoadBMP("textures/player_yellow.bmp");
     package->player_surfs[1] = SDL_LoadBMP("textures/player_red.bmp");
@@ -143,16 +156,72 @@ void draw_chests(SDL_package_type* package, Map_type* map)
     {
         for (int j = 0; j < map->size; j++)
         {
-            if (map->labyrinth[i][j] >= NUMBER_OF_TREASURES && map->labyrinth[i][j] < 2*NUMBER_OF_TREASURES)
+            if (map->labyrinth[i][j] >= TREASURE_OFFSET && map->labyrinth[i][j] < TREASURE_OFFSET + NUMBER_OF_TREASURES)
             {
                 draw_surface(package, package->chest,TEXTURE_SIZE*j, TEXTURE_SIZE*i);
             }
         }
     }
 }
+
+void draw_skills(SDL_package_type* package, Map_type* map)
+{
+    for (int i = 0; i < map->size; i++)
+    {
+        for (int j = 0; j < map->size; j++)
+        {
+            if (map->labyrinth[i][j] >= SKILL_OFFSET && map->labyrinth[i][j] < SKILL_OFFSET + NUMBER_OF_SKILLS)
+            {
+                draw_surface(package, package->skill, TEXTURE_SIZE * j, TEXTURE_SIZE * i);
+            }
+        }
+    }
+
+}
+void draw_score(SDL_package_type* package, Map_type* map)
+{
+    int position_y = 20;
+    char buf[128];
+    char number_holder[10];
+
+    for(int i=0;i<NUMBER_OF_CLIENTS;i++)
+    {
+        if(map->players[i].connected)
+        {
+            SDL_Color temp = package->foregroundColor;
+            package->foregroundColor = package->player_colors[i];
+            draw_text(map->players[i].nick, map->size * TEXTURE_SIZE + 10, position_y, *package);
+            position_y += 10;
+            sprintf(buf, "Punkty: %d", map->players[i].points);
+            draw_text(buf, map->size * TEXTURE_SIZE + 10, position_y, *package);
+            position_y += 10;
+            sprintf(buf, "Skarby: ");
+            for(int j=0;j<NUMBER_OF_TREASURES;j++)
+            {
+                if(map->players[i].treasures[j]==1)
+                {
+                    sprintf(number_holder, "%d, ", j);
+                    strcat(buf, number_holder);
+				}
+			}
+            if (strlen(buf) > strlen("Skarby: "))
+            {
+                buf[strlen(buf) - 2] = '\0';
+            }
+            draw_text(buf, map->size * TEXTURE_SIZE + 10, position_y, *package);
+            position_y += 10;
+            sprintf(buf, "Umiejetnosc: %d", map->players[i].skill);
+            draw_text(buf, map->size * TEXTURE_SIZE + 10, position_y, *package);
+            position_y += 20;
+            package->foregroundColor = temp;
+        }
+	}
+}
 void draw_map(SDL_package_type* package, Map_type* map)
 {
     draw_labyrinth(package, map);
     draw_chests(package, map);
+    draw_skills(package, map);
     draw_players(package, map);
+    draw_score(package, map);
 }

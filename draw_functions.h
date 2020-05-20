@@ -1,9 +1,10 @@
+#define _CRT_SECURE_NO_WARNINGS
 #include <SDL.h>
 #include <SDL_ttf.h>
 #include "../../../common/common_structures.h"
 
 #define FONT_SIZE 10
-#define SCREEN_WIDTH 640
+#define SCREEN_WIDTH 1000
 #define SCREEN_HEIGHT 640
 
 //struktura za³adowanych zmiennych SDL
@@ -31,6 +32,8 @@ typedef struct SDL_package_type
 	SDL_Surface* floor;
 	//tablica tekstur graczy
 	SDL_Surface* player_surfs[NUMBER_OF_CLIENTS];
+	//tablica kolorow graczy
+	SDL_Color player_colors[NUMBER_OF_CLIENTS];
 	//tekstura skrzyni
 	SDL_Surface* chest;
 	//teksura umiejetnosci
@@ -57,3 +60,9 @@ void draw_players(SDL_package_type* package, Map_type* map);
 
 //rysuje skrzynie
 void draw_chests(SDL_package_type* package, Map_type* map);
+
+//rysuje umiejetnosci
+void draw_skills(SDL_package_type* package, Map_type* map);
+
+//rysuje punkty graczy
+void draw_score(SDL_package_type* package, Map_type* map);

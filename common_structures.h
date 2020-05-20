@@ -6,6 +6,9 @@
 #define TEXTURE_SIZE 16
 #define LOCALHOST "127.0.0.1"
 #define NUMBER_OF_TREASURES 16
+#define TREASURE_OFFSET 16
+#define NUMBER_OF_SKILLS 4
+#define SKILL_OFFSET 50
 #include<winsock.h>
 
 //struktura danych gracza
@@ -29,6 +32,8 @@ typedef struct Player_type
 	int treasures[NUMBER_OF_TREASURES];
 	// najważniejszy skarb gracza
 	int important_treasure;
+	//posiadana umiejetnosc
+	int skill;
 }Player_type;
 
 //struktura mapy
@@ -40,4 +45,6 @@ typedef struct Map_type
 	Player_type* players;
 	//dane labiryntu
 	unsigned char** labyrinth;
+	// obecna liczba umiętności
+	int skills_number;
 }Map_type;
