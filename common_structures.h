@@ -34,6 +34,8 @@ typedef struct Player_type
 	int important_treasure;
 	//posiadana umiejetnosc
 	int skill;
+	//czy gracz jest zamrożony
+	int frozen;
 }Player_type;
 
 //struktura mapy
@@ -47,4 +49,6 @@ typedef struct Map_type
 	unsigned char** labyrinth;
 	// obecna liczba umiętności
 	int skills_number;
+	//mierzony czas
+	int time;
 }Map_type;

@@ -133,6 +133,8 @@ void serialize_map_fully(char* data, Map_type* map, int *everybody_ready, int *p
 		}
 		memcpy(data + position, &(map->players[i].skill), sizeof(int));
 		position += sizeof(int);
+		memcpy(data + position, &(map->players[i].frozen), sizeof(int));
+		position += sizeof(int);
 	}
 	for(int j=0;j<map->size;j++)
 	{
@@ -144,7 +146,10 @@ void serialize_map_fully(char* data, Map_type* map, int *everybody_ready, int *p
 	}
 	memcpy(data + position, everybody_ready, sizeof(int));
 	position += sizeof(int);
+	memcpy(data + position, &(map->time), sizeof(int));
+	position += sizeof(int);
 	memcpy(data + position, player_number, sizeof(int));
+	position += sizeof(int);
 }
 
 void send_important_treasure_id_to_client(SOCKET s, int id)
@@ -155,11 +160,22 @@ void send_important_treasure_id_to_client(SOCKET s, int id)
 	free(int_holder); 
 }
 
+DWORD WINAPI time_thread(void* args)
+{
+	Thread_args* arguments = (Thread_args*)args;
+	do
+	{
+		Sleep(1000);
+		arguments->map->time--;
+	} while (arguments->map->time>0);
+
+	return 0;
+}
+
 DWORD WINAPI skills_thread(void* args)
 {
 	Thread_args* arguments = (Thread_args*)args;
 	int max_skills_number = 7;
-	int result;
 	printf("Uruchomiono watek umiejetnosci\n");
 	while (!(*(arguments->everybody_ready)))
 	{
@@ -187,6 +203,97 @@ DWORD WINAPI skills_thread(void* args)
 			}
 		}
 		ReleaseMutex(arguments->map_mutex);
+	}
+	return 0;
+}
+
+int find_best_player_index_excluding_arg_player(Map_type* map, int player)
+{
+	int best_score = 0;
+	int best_index = 0;
+	for(int i=0;i<NUMBER_OF_CLIENTS;i++)
+	{
+		if(i==player)
+		{
+			continue;
+		}
+		if(map->players[i].connected)
+		{
+			if(map->players[i].points > best_score)
+			{
+				best_index = i;
+				best_score = map->players[i].points;
+			}
+		}
+	}
+	if(best_index == player)
+	{
+		best_index = (best_index + 1) % NUMBER_OF_CLIENTS;
+	}
+	return best_index;
+}
+
+void use_skill(Thread_args* args)
+{
+	int player_number = args->player_number;
+	Player_type* players = args->map->players;
+	switch(args->map->players[player_number].skill)
+	{
+	case 0:
+		if (WaitForSingleObject(args->map_mutex, INFINITE) == WAIT_OBJECT_0)
+		{
+			players[player_number].skill=-1;
+			int index = find_best_player_index_excluding_arg_player(args->map, player_number);
+			for(int i=0;i<NUMBER_OF_TREASURES;i++)
+			{
+				if(players[index].treasures[i]==1)
+				{
+					players[player_number].treasures[i] = 1;
+					players[index].treasures[i] = 0;
+					if(i==players[player_number].important_treasure)
+					{
+						players[player_number].points += 100;
+					}
+					else
+					{
+						players[player_number].points += 20;
+					}
+					if(i==players[index].important_treasure)
+					{
+						players[index].points -= 100;
+					}
+					else
+					{
+						players[index].points -= 20;
+					}
+				}
+			}
+		}
+		ReleaseMutex(args->map_mutex);
+		break;
+	case 1:
+		if (WaitForSingleObject(args->map_mutex, INFINITE) == WAIT_OBJECT_0)
+		{
+			args->map->players[player_number].skill=-1;
+			int index = find_best_player_index_excluding_arg_player(args->map, player_number);
+			players[index].frozen = 250;
+		}
+		ReleaseMutex(args->map_mutex);
+		break;
+	case 2:
+		if (WaitForSingleObject(args->map_mutex, INFINITE) == WAIT_OBJECT_0)
+		{
+			args->map->players[player_number].skill=-1;
+		}
+		ReleaseMutex(args->map_mutex);
+		break;
+	case 3:
+		if (WaitForSingleObject(args->map_mutex, INFINITE) == WAIT_OBJECT_0)
+		{
+			args->map->players[player_number].skill=-1;
+		}
+		ReleaseMutex(args->map_mutex);
+		break;
 	}
 }
 
@@ -275,8 +382,13 @@ DWORD WINAPI client_thread(void* args)
 						}
 					}
 				}
-				ReleaseMutex(arguments->ready_mutex);
 				*(arguments->everybody_ready) = rd;
+				if(arguments->map->time == -1)
+				{
+					arguments->map->time = 60;
+					CreateThread(NULL, 0, time_thread, (void*)arguments, 0, NULL);
+				}
+				ReleaseMutex(arguments->ready_mutex);
 				strcpy(buf, "full_map");
 				send(client_socket, buf, STRING_LENGTH, 0);
 				char* data = (char*)malloc(SIZE_OF_DATA);
@@ -337,6 +449,14 @@ DWORD WINAPI client_thread(void* args)
 			}
 			else if (strcmp(buf, "ping") == 0)
 			{
+				if (WaitForSingleObject(arguments->map_mutex, INFINITE) == WAIT_OBJECT_0)
+				{
+					if (arguments->map->players[player_number].frozen > 0)
+					{
+						arguments->map->players[player_number].frozen--;
+					}
+				}
+				ReleaseMutex(arguments->map_mutex);
 				strcpy(buf, "pong");
 				send(client_socket, buf, STRING_LENGTH, 0);
 				strcpy(buf, "full_map");
@@ -401,6 +521,10 @@ DWORD WINAPI client_thread(void* args)
 					ReleaseMutex(arguments->map_mutex);
 				}
 			}
+			else if(strcmp(buf, "skill")==0)
+			{
+				use_skill(arguments);
+			}
 			else if (strcmp(buf, "disconnect")==0)
 			{
 				printf("Player number %d has left\n", player_number);
@@ -436,6 +560,7 @@ int main()
 	read_BMP("labyrinth.bmp", &map);
 	set_treasures(&map);
 	map.skills_number = 0;
+	map.time = -1;
 	int everybody_ready = 0;
 	Thread_args *thread_args;
 	Player_type players[NUMBER_OF_CLIENTS];

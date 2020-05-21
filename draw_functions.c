@@ -96,7 +96,15 @@ int initialize_package(SDL_package_type *package)
         SDL_Quit();
         return 1;
     }
-   
+    package->frozen = SDL_LoadBMP("textures/frozen.bmp");
+    if (package->frozen == NULL)
+    {
+        SDL_DestroyRenderer(package->renderer);
+        SDL_DestroyWindow(package->win);
+        printf("Chest creation error\n");
+        SDL_Quit();
+        return 1;
+    }
     package->player_surfs[0] = SDL_LoadBMP("textures/player_yellow.bmp");
     package->player_surfs[1] = SDL_LoadBMP("textures/player_red.bmp");
     package->player_surfs[2] = SDL_LoadBMP("textures/player_blue.bmp");
@@ -147,7 +155,12 @@ void draw_players(SDL_package_type* package, Map_type* map)
         if (map->players[i].connected == 1 && map->players[i].ready == 1) 
         {
             draw_surface(package, package->player_surfs[i], map->players[i].x, map->players[i].y );
+            if (map->players[i].frozen > 0)
+            {
+                draw_surface(package, package->frozen, map->players[i].x, map->players[i].y);
+            }
         }
+
     }
 }
 void draw_chests(SDL_package_type* package, Map_type* map)
@@ -178,12 +191,14 @@ void draw_skills(SDL_package_type* package, Map_type* map)
     }
 
 }
-void draw_score(SDL_package_type* package, Map_type* map)
+void draw_info(SDL_package_type* package, Map_type* map)
 {
     int position_y = 20;
     char buf[128];
     char number_holder[10];
-
+    sprintf(buf, "Czas: %d", map->time);
+    draw_text(buf, map->size * TEXTURE_SIZE + 10, position_y, *package);
+    position_y += 30;
     for(int i=0;i<NUMBER_OF_CLIENTS;i++)
     {
         if(map->players[i].connected)
@@ -223,5 +238,5 @@ void draw_map(SDL_package_type* package, Map_type* map)
     draw_chests(package, map);
     draw_skills(package, map);
     draw_players(package, map);
-    draw_score(package, map);
+    draw_info(package, map);
 }

@@ -38,6 +38,8 @@ typedef struct SDL_package_type
 	SDL_Surface* chest;
 	//teksura umiejetnosci
 	SDL_Surface* skill;
+	//teksura zamra¿ania
+	SDL_Surface* frozen;
 }SDL_package_type;
 
 //nadaje pocz¹tkowe wartoœci paczce SDL

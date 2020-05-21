@@ -82,6 +82,8 @@ void deserialize_map_fully(char* data, Map_type* map, int *everybody_ready, int*
 		}
         memcpy(&(map->players[i].skill), data + position, sizeof(int));
         position += sizeof(int);
+        memcpy(&(map->players[i].frozen), data + position, sizeof(int));
+        position += sizeof(int);
     }
     for(int j=0;j<map->size;j++)
 	{
@@ -93,7 +95,11 @@ void deserialize_map_fully(char* data, Map_type* map, int *everybody_ready, int*
 	}
     memcpy(everybody_ready, data + position, sizeof(int));
     position += sizeof(int);
+    memcpy(&(map->time), data + position, sizeof(int));
+    position += sizeof(int);
     memcpy(player_number, data + position, sizeof(int));
+    position
++= sizeof(int);
 }
 
 
@@ -396,24 +402,31 @@ void start_game(Buttons_type buttons, SOCKET server, Map_type* map, SDL_package_
 			switch (event.type) 
             {
 			case SDL_KEYDOWN:
-                
-			    if (event.key.keysym.sym == buttons.up) 
+
+                if(player_number != -1 && map->players[player_number].frozen <= 0)
                 {
-                    make_proper_move(server, map, player_number, "up");
-			    }
-			    else if (event.key.keysym.sym == buttons.down) 
-                {
-                    make_proper_move(server, map, player_number, "down");
-			    }
-				else if (event.key.keysym.sym == buttons.right)                 
-                {	
-                    make_proper_move(server, map, player_number, "right");
-				}
-				else if (event.key.keysym.sym == buttons.left) 
-                {
-                    make_proper_move(server, map, player_number, "left");
-				}
-				break;
+			        if (event.key.keysym.sym == buttons.up) 
+                    {
+                        make_proper_move(server, map, player_number, "up");
+			        }
+			        else if (event.key.keysym.sym == buttons.down) 
+                    {
+                        make_proper_move(server, map, player_number, "down");
+			        }
+				    else if (event.key.keysym.sym == buttons.right)                 
+                    {	
+                        make_proper_move(server, map, player_number, "right");
+				    }
+				    else if (event.key.keysym.sym == buttons.left) 
+                    {
+                        make_proper_move(server, map, player_number, "left");
+				    }
+                    else if(event.key.keysym.sym == buttons.action)
+                    {
+                        send_key_to_server(server, "skill");
+				    }
+                }
+                break;
 			case SDL_KEYUP:
 				break;
 			case SDL_QUIT:
