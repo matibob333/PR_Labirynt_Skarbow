@@ -20,6 +20,8 @@ typedef struct Thread_args
 	HANDLE map_mutex;
 	//uchwyt mutexa gotowoœci graczy
 	HANDLE ready_mutex;
+	//uchwyt semafora czasu
+	HANDLE time_semaphore;
 }Thread_args;
 
 void send_labyrinth_to_client(SOCKET client, Map_type* map)
@@ -82,9 +84,21 @@ void set_treasures(Map_type* map)
 			x_random = rand() % map->size;
 			y_random = rand() % map->size;
 
-		} while (map->labyrinth[x_random][y_random] == 0 || (map->labyrinth[x_random][y_random] >= TREASURE_OFFSET && map->labyrinth[x_random][y_random] < TREASURE_OFFSET + NUMBER_OF_TREASURES));
+		} while (map->labyrinth[x_random][y_random] != FLOOR);
 		map->labyrinth[x_random][y_random] = TREASURE_OFFSET + i;
 	}
+}
+
+void set_exit(Map_type* map)
+{
+	int x_random, y_random;
+	do
+	{
+		x_random = rand() % map->size;
+		y_random = rand() % map->size;
+
+	} while (map->labyrinth[x_random][y_random] != FLOOR);
+	map->labyrinth[x_random][y_random] = EXIT;
 }
 
 //serializacja danych z mapy do tablicy bajtów w celu przes³ania
@@ -135,6 +149,8 @@ void serialize_map_fully(char* data, Map_type* map, int *everybody_ready, int *p
 		position += sizeof(int);
 		memcpy(data + position, &(map->players[i].frozen), sizeof(int));
 		position += sizeof(int);
+		memcpy(data + position, &(map->players[i].speed), sizeof(int));
+		position += sizeof(int);
 	}
 	for(int j=0;j<map->size;j++)
 	{
@@ -163,12 +179,16 @@ void send_important_treasure_id_to_client(SOCKET s, int id)
 DWORD WINAPI time_thread(void* args)
 {
 	Thread_args* arguments = (Thread_args*)args;
-	do
+	if (WaitForSingleObject(arguments->time_semaphore, INFINITE) == WAIT_OBJECT_0)
 	{
-		Sleep(1000);
-		arguments->map->time--;
-	} while (arguments->map->time>0);
-
+		do
+		{
+			Sleep(1000);
+			arguments->map->time--;
+		} while (arguments->map->time > 0);
+	}
+	ReleaseSemaphore(arguments->time_semaphore, 1, NULL);
+	free(arguments);
 	return 0;
 }
 
@@ -190,7 +210,7 @@ DWORD WINAPI skills_thread(void* args)
 		{
 			x = rand() % arguments->map->size;
 			y = rand() % arguments->map->size;
-		} while (arguments->map->labyrinth[y][x] != 1 );
+		} while (arguments->map->labyrinth[y][x] != FLOOR );
 		skill_id = rand() % NUMBER_OF_SKILLS;
 		if(WaitForSingleObject(arguments->map_mutex, INFINITE) == WAIT_OBJECT_0)
 		{
@@ -204,6 +224,7 @@ DWORD WINAPI skills_thread(void* args)
 		}
 		ReleaseMutex(arguments->map_mutex);
 	}
+	free(arguments);
 	return 0;
 }
 
@@ -266,6 +287,7 @@ void use_skill(Thread_args* args)
 					{
 						players[index].points -= 20;
 					}
+					break;
 				}
 			}
 		}
@@ -274,7 +296,7 @@ void use_skill(Thread_args* args)
 	case 1:
 		if (WaitForSingleObject(args->map_mutex, INFINITE) == WAIT_OBJECT_0)
 		{
-			args->map->players[player_number].skill=-1;
+			players[player_number].skill=-1;
 			int index = find_best_player_index_excluding_arg_player(args->map, player_number);
 			players[index].frozen = 250;
 		}
@@ -283,14 +305,23 @@ void use_skill(Thread_args* args)
 	case 2:
 		if (WaitForSingleObject(args->map_mutex, INFINITE) == WAIT_OBJECT_0)
 		{
-			args->map->players[player_number].skill=-1;
+			players[player_number].skill=-1;
+			players[player_number].speed = 300;
 		}
 		ReleaseMutex(args->map_mutex);
 		break;
 	case 3:
 		if (WaitForSingleObject(args->map_mutex, INFINITE) == WAIT_OBJECT_0)
 		{
-			args->map->players[player_number].skill=-1;
+			int x_temp, y_temp;
+			players[player_number].skill=-1;
+			int index = find_best_player_index_excluding_arg_player(args->map, player_number);
+			x_temp = players[index].x;
+			y_temp = players[index].y;
+			players[index].x = players[player_number].x;
+			players[index].y = players[player_number].y;
+			players[player_number].x = x_temp;
+			players[player_number].y = y_temp;
 		}
 		ReleaseMutex(args->map_mutex);
 		break;
@@ -307,6 +338,16 @@ DWORD WINAPI client_thread(void* args)
 	int byte_no = SIZE_OF_DATA;
 	int rd;
 	srand(time(NULL) * GetCurrentThreadId());
+	if(*(arguments->everybody_ready))
+	{
+		recv(client_socket, buf, STRING_LENGTH, 0);
+		if(strcmp(buf, "connect")==0)
+		{
+			strcpy(buf, "game_started");
+			send(client_socket, buf, STRING_LENGTH, 0);
+			lost_client = 1;
+		}
+	}
 	while (!(*(arguments->everybody_ready)))
 	{
 		if (recv(client_socket, buf, STRING_LENGTH, 0) > 0)
@@ -314,6 +355,8 @@ DWORD WINAPI client_thread(void* args)
 			//gracz do³¹cza do gry
 			if (strcmp(buf, "connect")==0)
 			{
+				strcpy(buf, "OK");
+				send(client_socket, buf, STRING_LENGTH, 0);
 				recv(client_socket, buf, STRING_LENGTH, 0);
 				if (WaitForSingleObject(arguments->map_mutex, INFINITE) == WAIT_OBJECT_0)
 				{
@@ -323,7 +366,7 @@ DWORD WINAPI client_thread(void* args)
 					{
 						x = rand() % arguments->map->size;
 						y = rand() % arguments->map->size;
-					} while (arguments->map->labyrinth[y][x] == 0);
+					} while (arguments->map->labyrinth[y][x] == WALL);
 					arguments->map->players[player_number].x = x*TEXTURE_SIZE;
 					arguments->map->players[player_number].y = y*TEXTURE_SIZE;
 					arguments->map->players[player_number].connected = 1;
@@ -381,12 +424,12 @@ DWORD WINAPI client_thread(void* args)
 							}
 						}
 					}
-				}
-				*(arguments->everybody_ready) = rd;
-				if(arguments->map->time == -1)
-				{
-					arguments->map->time = 60;
-					CreateThread(NULL, 0, time_thread, (void*)arguments, 0, NULL);
+					*(arguments->everybody_ready) = rd;
+					if (arguments->map->time == -1 && rd == 1)
+					{
+						arguments->map->time = 120;
+						ReleaseSemaphore(arguments->time_semaphore, 1, NULL);
+					}
 				}
 				ReleaseMutex(arguments->ready_mutex);
 				strcpy(buf, "full_map");
@@ -406,17 +449,29 @@ DWORD WINAPI client_thread(void* args)
 			}
 		}
 	}
-	ReleaseMutex(arguments->ready_mutex);
+	int speed = SPEED;
 	while (!lost_client)
 	{
 		if (recv(client_socket, buf, STRING_LENGTH, 0) > 0)
 		{
+			if (arguments->map->players[player_number].speed > 0)
+			{
+				speed = NEW_SPEED;
+			}
+			else
+			{
+				speed = SPEED;
+			}
 			if (strcmp(buf, "up") == 0)
 			{
 				printf("Player number %d sent GURA\n", player_number);
 				if (WaitForSingleObject(arguments->map_mutex, INFINITE) == WAIT_OBJECT_0)
 				{
-					arguments->map->players[player_number].y-= SPEED;
+					if(arguments->map->players[player_number].y % NEW_SPEED != 0)
+					{
+						speed = SPEED;
+					}
+					arguments->map->players[player_number].y-= speed;
 				}
 				ReleaseMutex(arguments->map_mutex);
 			}
@@ -425,7 +480,11 @@ DWORD WINAPI client_thread(void* args)
 				printf("Player number %d sent DUU\n", player_number);
 				if (WaitForSingleObject(arguments->map_mutex, INFINITE) == WAIT_OBJECT_0)
 				{
-					arguments->map->players[player_number].y+= SPEED;
+					if(arguments->map->players[player_number].y % NEW_SPEED != 0)
+					{
+						speed = SPEED;
+					}
+					arguments->map->players[player_number].y+= speed;
 				}
 				ReleaseMutex(arguments->map_mutex);
 			}
@@ -434,7 +493,11 @@ DWORD WINAPI client_thread(void* args)
 				printf("Player number %d sent PRAWO\n", player_number);
 				if (WaitForSingleObject(arguments->map_mutex, INFINITE) == WAIT_OBJECT_0)
 				{
-					arguments->map->players[player_number].x+=SPEED;
+					if(arguments->map->players[player_number].x % NEW_SPEED != 0)
+					{
+						speed = SPEED;
+					}
+					arguments->map->players[player_number].x+=speed;
 				}
 				ReleaseMutex(arguments->map_mutex);
 			}
@@ -443,7 +506,11 @@ DWORD WINAPI client_thread(void* args)
 				printf("Player number %d sent LEWO\n", player_number);
 				if (WaitForSingleObject(arguments->map_mutex, INFINITE) == WAIT_OBJECT_0)
 				{
-					arguments->map->players[player_number].x-=SPEED;
+					if(arguments->map->players[player_number].x % NEW_SPEED != 0)
+					{
+						speed = SPEED;
+					}
+					arguments->map->players[player_number].x-=speed;
 				}
 				ReleaseMutex(arguments->map_mutex);
 			}
@@ -454,6 +521,10 @@ DWORD WINAPI client_thread(void* args)
 					if (arguments->map->players[player_number].frozen > 0)
 					{
 						arguments->map->players[player_number].frozen--;
+					}
+					if (arguments->map->players[player_number].speed > 0)
+					{
+						arguments->map->players[player_number].speed--;
 					}
 				}
 				ReleaseMutex(arguments->map_mutex);
@@ -485,7 +556,7 @@ DWORD WINAPI client_thread(void* args)
 						{
 							chest_index = i - TREASURE_OFFSET;
 							arguments->map->players[player_number].treasures[chest_index] = 1;
-							arguments->map->labyrinth[top][left] = 1;
+							arguments->map->labyrinth[top][left] = FLOOR;
 							if (chest_index == arguments->map->players[player_number].important_treasure)
 							{
 								arguments->map->players[player_number].points += 100;
@@ -514,12 +585,16 @@ DWORD WINAPI client_thread(void* args)
 						{
 							skill_index = i - SKILL_OFFSET;
 							arguments->map->players[player_number].skill = skill_index;
-							arguments->map->labyrinth[top][left] = 1;
+							arguments->map->labyrinth[top][left] = FLOOR;
 							arguments->map->skills_number--;
 						} 
 					}
 					ReleaseMutex(arguments->map_mutex);
 				}
+			}
+			else if (strcmp(buf, "end_game") == 0)
+			{
+				
 			}
 			else if(strcmp(buf, "skill")==0)
 			{
@@ -553,11 +628,13 @@ DWORD WINAPI client_thread(void* args)
 int main()
 {
 	srand(time(NULL) * GetCurrentThreadId());	
-	HANDLE map_mutex, ready_mutex;
+	HANDLE map_mutex, ready_mutex, time_semaphore;
 	map_mutex = CreateMutex(NULL, FALSE, NULL);
 	ready_mutex = CreateMutex(NULL, FALSE, NULL);
+	time_semaphore = CreateSemaphore(NULL, 0, 1, NULL);
 	Map_type map;
 	read_BMP("labyrinth.bmp", &map);
+	set_exit(&map);
 	set_treasures(&map);
 	map.skills_number = 0;
 	map.time = -1;
@@ -624,8 +701,16 @@ int main()
 	thread_args->everybody_ready = &everybody_ready;
 	thread_args->map_mutex = map_mutex;
 	thread_args->ready_mutex = ready_mutex;
+	thread_args->time_semaphore = time_semaphore;
 	thread_args->map = &map;
 	CreateThread(NULL, 0, skills_thread, (void*)thread_args, 0, &id);
+	thread_args = (Thread_args*)malloc(sizeof(Thread_args));
+	thread_args->everybody_ready = &everybody_ready;
+	thread_args->map_mutex = map_mutex;
+	thread_args->ready_mutex = ready_mutex;
+	thread_args->time_semaphore = time_semaphore;
+	thread_args->map = &map;
+	CreateThread(NULL, 0, time_thread, (void*)thread_args, 0, &id);
 	while (1)
 	{
 		lenc = sizeof(sc);
@@ -636,6 +721,7 @@ int main()
 		thread_args->everybody_ready = &everybody_ready;
 		thread_args->map_mutex = map_mutex;
 		thread_args->ready_mutex = ready_mutex;
+		thread_args->time_semaphore = time_semaphore;
 		for(int i=0;i<NUMBER_OF_CLIENTS;i++)
 		{
 			if(!players[i].connected)
@@ -648,6 +734,9 @@ int main()
 		thread_args->map = &map;
 		CreateThread(NULL, 0, client_thread, (void*)thread_args,0, &id);
 	}
+	CloseHandle(time_semaphore);
+	CloseHandle(map_mutex);
+	CloseHandle(ready_mutex);
 	free(map.labyrinth);
 	closesocket(si);
 	WSACleanup();

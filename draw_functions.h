@@ -3,8 +3,9 @@
 #include <SDL_ttf.h>
 #include "../../../common/common_structures.h"
 
-#define FONT_SIZE 10
-#define SCREEN_WIDTH 1000
+#define FONT_SIZE 16
+#define POSITION_Y 35
+#define SCREEN_WIDTH 860
 #define SCREEN_HEIGHT 640
 
 //struktura za³adowanych zmiennych SDL
@@ -40,6 +41,10 @@ typedef struct SDL_package_type
 	SDL_Surface* skill;
 	//teksura zamra¿ania
 	SDL_Surface* frozen;
+	//ikona pocz¹tkowa
+	SDL_Surface* icon;
+	//wyjœcie z labiryntu
+	SDL_Surface* exit;
 }SDL_package_type;
 
 //nadaje pocz¹tkowe wartoœci paczce SDL

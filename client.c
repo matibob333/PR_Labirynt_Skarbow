@@ -84,6 +84,8 @@ void deserialize_map_fully(char* data, Map_type* map, int *everybody_ready, int*
         position += sizeof(int);
         memcpy(&(map->players[i].frozen), data + position, sizeof(int));
         position += sizeof(int);
+        memcpy(&(map->players[i].speed), data + position, sizeof(int));
+        position += sizeof(int);
     }
     for(int j=0;j<map->size;j++)
 	{
@@ -177,14 +179,20 @@ int load_nickname(SDL_package_type package, char* nick)
     SDL_bool done = SDL_FALSE;
     SDL_Event event;
     char text[128];
+    char title[128];
+    int position_x = 350;
+    int position_y = 100;
+    sprintf(title, "Labirynt skarbów");
     sprintf(text, "Podaj swoj nick: ");
     sprintf(nick, "\0");
     int quit = 0;
     while (!done && !quit)
     {
         SDL_FillRect(package.screen, NULL, package.color);
-        draw_text(nick, 100, 100, package);
-        draw_text(text, 100, 50, package);
+        draw_surface(&package, package.icon, position_x, position_y);
+        draw_text(title, position_x, position_y + 140, package);
+        draw_text(text, position_x, position_y + 220, package);
+        draw_text(nick, position_x, position_y + 260, package);
         if (SDL_PollEvent(&event))
         {
             switch (event.type)
@@ -243,16 +251,28 @@ SOCKET connect_to_server(const char* address, char* nick, Map_type* map, int *im
     {
         strcpy(buf, "connect");
         send(s, buf, STRING_LENGTH, 0);
-        strcpy(buf, nick);
-        send(s, buf, STRING_LENGTH, 0);
-        recive_labyrinth_from_server(s,map);
-        receive_important_treasure_id_from_server(s, important_treasure);
-        return s;
+        recv(s, buf, STRING_LENGTH,0);
+        if (strcmp(buf, "OK") == 0)
+        {
+            strcpy(buf, nick);
+            send(s, buf, STRING_LENGTH, 0);
+            recive_labyrinth_from_server(s, map);
+            receive_important_treasure_id_from_server(s, important_treasure);
+            return s;
+        }
+        else
+        {
+            closesocket(s);
+            WSACleanup();
+            return 0;
+		}
     }
 }
 int initialize_players(Buttons_type buttons, SOCKET server, Map_type* map, SDL_package_type package, int important_treasure)
 {
     char buf[STRING_LENGTH];
+    int position_x = 150;
+    int position_y = 120;
     int latency;
     SDL_Event event;
     int ready = 0;
@@ -272,11 +292,11 @@ int initialize_players(Buttons_type buttons, SOCKET server, Map_type* map, SDL_p
                 {
                     package.foregroundColor = (SDL_Color){ 0, 255, 0 };
                 }
-                draw_text(map->players[i].nick, 100, 100 + 20 * i, package);
+                draw_text(map->players[i].nick, position_x + 90*i, position_y, package);
             }
         }
-        sprintf(treasure_name, "twoj skarb: %d", important_treasure);
-        draw_text(treasure_name, 100, 300, package);
+        sprintf(treasure_name, "Twoj skarb: %d", important_treasure);
+        draw_text(treasure_name, position_x + 200, position_y + 200, package);
         package.foregroundColor = (SDL_Color){ 255, 255, 255 };
         while (SDL_PollEvent(&event))
         {
@@ -324,32 +344,53 @@ void make_proper_move(SOCKET server, Map_type* map, int player_number, const cha
     int border_vertical;
     int vertical_border;
     int horizontal_border;
+    int speed = SPEED;
+    if(map->players[player_number].speed > 0)
+    {
+        speed = NEW_SPEED;
+	}
     
     if(strcmp(command,"up")==0)
     {
-        delta_vertical = -SPEED;
+        if(map->players[player_number].y % NEW_SPEED != 0)
+        {
+            speed = SPEED;
+		}
+        delta_vertical = -speed;
         delta_horizontal = 0;
         border_horizontal = TEXTURE_SIZE - 1;
         border_vertical = 0;
 	}
     else if(strcmp(command, "down")==0)
     {
-        delta_vertical = SPEED + TEXTURE_SIZE - 1;
+        if(map->players[player_number].y % NEW_SPEED != 0)
+        {
+            speed = SPEED;
+		}
+        delta_vertical = speed + TEXTURE_SIZE - 1;
         delta_horizontal = 0;
         border_horizontal = TEXTURE_SIZE - 1;
         border_vertical = 0;
 	}
     else if(strcmp(command, "right")==0)
     {
+        if(map->players[player_number].x % NEW_SPEED != 0)
+        {
+            speed = SPEED;
+		}
         delta_vertical = 0;
-        delta_horizontal = SPEED + TEXTURE_SIZE - 1;
+        delta_horizontal = speed + TEXTURE_SIZE - 1;
         border_vertical = TEXTURE_SIZE - 1;
         border_horizontal = 0;
 	}
     else if(strcmp(command, "left")==0)
     {
+        if(map->players[player_number].x % NEW_SPEED != 0)
+        {
+            speed = SPEED;
+		}
         delta_vertical = 0;
-        delta_horizontal = -SPEED;
+        delta_horizontal = -speed;
         border_vertical = TEXTURE_SIZE - 1;
         border_horizontal = 0;
 	}
@@ -363,7 +404,7 @@ void make_proper_move(SOCKET server, Map_type* map, int player_number, const cha
         horizontal = (map->players[player_number].x + delta_horizontal)/ TEXTURE_SIZE;
         vertical_border = ((map->players[player_number].y + delta_vertical + border_vertical) / TEXTURE_SIZE);
         horizontal_border = ((map->players[player_number].x + delta_horizontal + border_horizontal) / TEXTURE_SIZE);
-        if (map->labyrinth[vertical][horizontal] != 0 && map->labyrinth[vertical_border][horizontal_border] != 0)
+        if (map->labyrinth[vertical][horizontal] != WALL && map->labyrinth[vertical_border][horizontal_border] != WALL)
         {
             if ((map->labyrinth[vertical][horizontal] >= TREASURE_OFFSET && map->labyrinth[vertical][horizontal] < TREASURE_OFFSET + NUMBER_OF_TREASURES) || (map->labyrinth[vertical_border][horizontal_border] >= TREASURE_OFFSET && map->labyrinth[vertical_border][horizontal_border] < TREASURE_OFFSET + NUMBER_OF_TREASURES))
             {
@@ -375,6 +416,10 @@ void make_proper_move(SOCKET server, Map_type* map, int player_number, const cha
                 send_key_to_server(server, command);
                 send_key_to_server(server, "get_skill");
 			}
+            else if (map->labyrinth[vertical][horizontal] == EXIT)
+            {
+                send_key_to_server(server, "end_game");
+            }
             else
             {
                 send_key_to_server(server, command);
@@ -446,17 +491,19 @@ void start_game(Buttons_type buttons, SOCKET server, Map_type* map, SDL_package_
 
 Buttons_type set_buttons(SDL_package_type package)
 {
+    int position_x = 350;
+    int position_y = 100;
     Buttons_type buttons = (Buttons_type){ 0, 0, 0, 0, 0 };
     SDL_Event event;
     int choice = 1;
     while (choice)
     {
         SDL_FillRect(package.screen, NULL, package.color);
-        draw_text("Wybierz sterowanie", 100, 100, package);
-        draw_text("1 - strzalki", 100, 120, package);
-        draw_text("2 - WSAD", 100, 140, package);
-        draw_text("3 - IJKL", 100, 160, package);
-        draw_text("4 - TFGH", 100, 180, package);
+        draw_text("Wybierz sterowanie: ", position_x, position_y, package);
+        draw_text("1 - strzalki", position_x, position_y + POSITION_Y, package);
+        draw_text("2 - WSAD", position_x, position_y + 2*POSITION_Y, package);
+        draw_text("3 - IJKL", position_x, position_y + 3*POSITION_Y, package);
+        draw_text("4 - TFGH", position_x, position_y + 4*POSITION_Y, package);
         while (SDL_PollEvent(&event))
         {
             switch (event.type)
@@ -555,12 +602,15 @@ int main(int argc, char** argv)
     if(buttons_set.up != SDLK_0)
     {
         server = connect_to_server(LOCALHOST, nick, map, &important_treasure);
-        if(initialize_players(buttons_set, server, map, package, important_treasure) == 0)
+        if (server != 0)
         {
-            start_game(buttons_set, server, map, package);
+            if (initialize_players(buttons_set, server, map, package, important_treasure) == 0)
+            {
+                start_game(buttons_set, server, map, package);
+            }
+            close_connection_to_server(server);
         }
-	}  
-    close_connection_to_server(server);
+	}
     SDL_FreeSurface(package.screen);
     SDL_DestroyTexture(package.texture);
     SDL_DestroyRenderer(package.renderer);

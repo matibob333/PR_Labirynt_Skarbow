@@ -101,10 +101,29 @@ int initialize_package(SDL_package_type *package)
     {
         SDL_DestroyRenderer(package->renderer);
         SDL_DestroyWindow(package->win);
-        printf("Chest creation error\n");
+        printf("Frozen creation error\n");
         SDL_Quit();
         return 1;
     }
+    package->icon = SDL_LoadBMP("textures/icon.bmp");
+    if (package->icon == NULL)
+    {
+        SDL_DestroyRenderer(package->renderer);
+        SDL_DestroyWindow(package->win);
+        printf("Icon creation error\n");
+        SDL_Quit();
+        return 1;
+    }
+    package->exit = SDL_LoadBMP("textures/exit.bmp");
+    if (package->exit == NULL)
+    {
+        SDL_DestroyRenderer(package->renderer);
+        SDL_DestroyWindow(package->win);
+        printf("Icon creation error\n");
+        SDL_Quit();
+        return 1;
+    }
+
     package->player_surfs[0] = SDL_LoadBMP("textures/player_yellow.bmp");
     package->player_surfs[1] = SDL_LoadBMP("textures/player_red.bmp");
     package->player_surfs[2] = SDL_LoadBMP("textures/player_blue.bmp");
@@ -137,10 +156,15 @@ void draw_labyrinth(SDL_package_type* package, Map_type* map)
     {
         for (int j = 0; j < map->size; j++)
         {
-            if (map->labyrinth[i][j] == 0)
+            if (map->labyrinth[i][j] == WALL)
             {
                 draw_surface(package, package->wall,TEXTURE_SIZE*j, TEXTURE_SIZE*i);
             }
+            else if(map->labyrinth[i][j] == EXIT)
+            {
+                draw_surface(package, package->floor, TEXTURE_SIZE * j, TEXTURE_SIZE * i);
+                draw_surface(package, package->exit, TEXTURE_SIZE * j, TEXTURE_SIZE * i);
+			}
             else
             {
                 draw_surface(package, package->floor, TEXTURE_SIZE * j, TEXTURE_SIZE * i);
@@ -177,6 +201,14 @@ void draw_chests(SDL_package_type* package, Map_type* map)
     }
 }
 
+void draw_end_game(SDL_package_type* package, Map_type* map)
+{
+    char buf[128];
+    int position_y = 350;
+    sprintf(buf, "Koniec gry");
+    draw_text(buf, map->size * TEXTURE_SIZE + 10, position_y, *package);
+}
+
 void draw_skills(SDL_package_type* package, Map_type* map)
 {
     for (int i = 0; i < map->size; i++)
@@ -198,18 +230,19 @@ void draw_info(SDL_package_type* package, Map_type* map)
     char number_holder[10];
     sprintf(buf, "Czas: %d", map->time);
     draw_text(buf, map->size * TEXTURE_SIZE + 10, position_y, *package);
-    position_y += 30;
+    position_y += POSITION_Y;
     for(int i=0;i<NUMBER_OF_CLIENTS;i++)
     {
         if(map->players[i].connected)
         {
             SDL_Color temp = package->foregroundColor;
             package->foregroundColor = package->player_colors[i];
-            draw_text(map->players[i].nick, map->size * TEXTURE_SIZE + 10, position_y, *package);
-            position_y += 10;
+            sprintf(buf, "Nick: %s", map->players[i].nick);
+            draw_text(buf, map->size * TEXTURE_SIZE + 10, position_y, *package);
+            position_y += POSITION_Y;
             sprintf(buf, "Punkty: %d", map->players[i].points);
             draw_text(buf, map->size * TEXTURE_SIZE + 10, position_y, *package);
-            position_y += 10;
+            position_y += POSITION_Y;
             sprintf(buf, "Skarby: ");
             for(int j=0;j<NUMBER_OF_TREASURES;j++)
             {
@@ -224,10 +257,10 @@ void draw_info(SDL_package_type* package, Map_type* map)
                 buf[strlen(buf) - 2] = '\0';
             }
             draw_text(buf, map->size * TEXTURE_SIZE + 10, position_y, *package);
-            position_y += 10;
+            position_y += POSITION_Y;
             sprintf(buf, "Umiejetnosc: %d", map->players[i].skill);
             draw_text(buf, map->size * TEXTURE_SIZE + 10, position_y, *package);
-            position_y += 20;
+            position_y += POSITION_Y;
             package->foregroundColor = temp;
         }
 	}
@@ -239,4 +272,8 @@ void draw_map(SDL_package_type* package, Map_type* map)
     draw_skills(package, map);
     draw_players(package, map);
     draw_info(package, map);
+    if (map->time == 0)
+    {
+        draw_end_game(package, map);
+    }
 }

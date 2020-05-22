@@ -3,12 +3,16 @@
 #define SIZE_OF_DATA 2048
 #define STRING_LENGTH 20
 #define SPEED 4
+#define NEW_SPEED 8
 #define TEXTURE_SIZE 16
 #define LOCALHOST "127.0.0.1"
 #define NUMBER_OF_TREASURES 16
 #define TREASURE_OFFSET 16
 #define NUMBER_OF_SKILLS 4
 #define SKILL_OFFSET 50
+#define WALL 0
+#define FLOOR 1
+#define EXIT 2
 #include<winsock.h>
 
 //struktura danych gracza
@@ -34,8 +38,10 @@ typedef struct Player_type
 	int important_treasure;
 	//posiadana umiejetnosc
 	int skill;
-	//czy gracz jest zamrożony
+	//zamrożenie gracza
 	int frozen;
+	//przyspieszenie gracza
+	int speed;
 }Player_type;
 
 //struktura mapy
