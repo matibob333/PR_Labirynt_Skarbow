@@ -5,7 +5,7 @@
 
 #define FONT_SIZE 16
 #define POSITION_Y 35
-#define SCREEN_WIDTH 860
+#define SCREEN_WIDTH 900
 #define SCREEN_HEIGHT 640
 
 //struktura za³adowanych zmiennych SDL
@@ -72,4 +72,7 @@ void draw_chests(SDL_package_type* package, Map_type* map);
 void draw_skills(SDL_package_type* package, Map_type* map);
 
 //rysuje punkty graczy
-void draw_score(SDL_package_type* package, Map_type* map);
+void draw_info(SDL_package_type* package, Map_type* map);
+
+//rysuje ekran koncowy
+void draw_game_over(SDL_package_type* package, Map_type* map);

@@ -54,7 +54,7 @@ void deserialize_map(char* data, Map_type* map)
     }
 }
 
-void deserialize_map_fully(char* data, Map_type* map, int *everybody_ready, int* player_number)
+void deserialize_map_fully(char* data, Map_type* map, int *everybody_ready, int* player_number, char* game_over)
 {
     int position = 0;
     for (int i = 0; i < NUMBER_OF_CLIENTS; i++)
@@ -86,6 +86,8 @@ void deserialize_map_fully(char* data, Map_type* map, int *everybody_ready, int*
         position += sizeof(int);
         memcpy(&(map->players[i].speed), data + position, sizeof(int));
         position += sizeof(int);
+        memcpy(&(map->players[i].has_left), data + position, sizeof(int));
+        position += sizeof(int);
     }
     for(int j=0;j<map->size;j++)
 	{
@@ -100,8 +102,9 @@ void deserialize_map_fully(char* data, Map_type* map, int *everybody_ready, int*
     memcpy(&(map->time), data + position, sizeof(int));
     position += sizeof(int);
     memcpy(player_number, data + position, sizeof(int));
-    position
-+= sizeof(int);
+    position+= sizeof(int);
+    memcpy(game_over, data + position, sizeof(char));
+    position += sizeof(char);
 }
 
 
@@ -150,15 +153,15 @@ void receive_data_from_server(SOCKET s, Map_type* map)
     free(data);
 }
 
-void receive_full_data_from_server(SOCKET s, Map_type* map, int* everybody_ready, int* player_number)
+void receive_full_data_from_server(SOCKET s, Map_type* map, int* everybody_ready, int* player_number, char* game_over)
 {
     char* data = (char*)malloc(SIZE_OF_DATA);
     recv(s, data, SIZE_OF_DATA, 0);
-    deserialize_map_fully(data, map, everybody_ready, player_number);
+    deserialize_map_fully(data, map, everybody_ready, player_number, game_over);
     free(data);
 }
 
-int ping_and_receive(SOCKET s, Map_type* map, int *everybody_ready, int* player_number)
+int ping_and_receive(SOCKET s, Map_type* map, int *everybody_ready, int* player_number, char* game_over)
 {
     char buf[STRING_LENGTH];
     int latency = ping_server(s);
@@ -169,7 +172,7 @@ int ping_and_receive(SOCKET s, Map_type* map, int *everybody_ready, int* player_
     }
     else if (strcmp(buf, "full_map") == 0)
     {
-        receive_full_data_from_server(s, map, everybody_ready, player_number);
+        receive_full_data_from_server(s, map, everybody_ready, player_number, game_over);
     }
     return latency;
 }
@@ -270,7 +273,6 @@ SOCKET connect_to_server(const char* address, char* nick, Map_type* map, int *im
 }
 int initialize_players(Buttons_type buttons, SOCKET server, Map_type* map, SDL_package_type package, int important_treasure)
 {
-    char buf[STRING_LENGTH];
     int position_x = 150;
     int position_y = 120;
     int latency;
@@ -324,7 +326,8 @@ int initialize_players(Buttons_type buttons, SOCKET server, Map_type* map, SDL_p
                 break;
 			}
 		}
-        latency = ping_and_receive(server, map, &everybody_ready, &player_number);
+        char dummy;
+        latency = ping_and_receive(server, map, &everybody_ready, &player_number, &dummy);
         SDL_UpdateTexture(package.texture, NULL, package.screen->pixels, package.screen->pitch);
         //SDL_RenderClear(package.renderer);
         SDL_RenderCopy(package.renderer, package.texture, NULL, NULL);
@@ -416,18 +419,63 @@ void make_proper_move(SOCKET server, Map_type* map, int player_number, const cha
                 send_key_to_server(server, command);
                 send_key_to_server(server, "get_skill");
 			}
-            else if (map->labyrinth[vertical][horizontal] == EXIT)
-            {
-                send_key_to_server(server, "end_game");
-            }
             else
             {
                 send_key_to_server(server, command);
             }
 		}
-
 	}
+}
 
+int check_if_on_exit(Map_type* map, int player_number)
+{
+    int left = map->players[player_number].x/TEXTURE_SIZE;
+	int top = map->players[player_number].y/TEXTURE_SIZE;
+	int right = (map->players[player_number].x+TEXTURE_SIZE-1)/TEXTURE_SIZE;
+	int bottom = (map->players[player_number].y+TEXTURE_SIZE-1)/TEXTURE_SIZE;
+    if(left==right && top==bottom && map->labyrinth[top][left]==EXIT)
+    {
+        return 1;
+	}
+    else
+    {
+        return 0;
+	}
+}
+
+void draw_end_game(SDL_package_type* package, Map_type* map)
+{
+    int quit = 0;
+    SDL_Event event;
+    for (int i = 0; i < NUMBER_OF_CLIENTS; i++)
+    {
+        if (map->players[i].connected)
+        {
+            if (!map->players[i].has_left)
+            {
+                map->players[i].points /= 2;
+            }
+        }
+    }
+    while (!quit)
+    {
+        draw_game_over(package, map);
+        while (SDL_PollEvent(&event))
+        {
+            switch (event.type)
+            {
+            case SDL_KEYDOWN:
+                quit = 1;
+                break;
+            case SDL_QUIT:
+                quit = 1;
+                break;
+            }
+        }
+        SDL_UpdateTexture(package->texture, NULL, package->screen->pixels, package->screen->pitch);
+        SDL_RenderCopy(package->renderer, package->texture, NULL, NULL);
+        SDL_RenderPresent(package->renderer);
+    }
 }
 
 void start_game(Buttons_type buttons, SOCKET server, Map_type* map, SDL_package_type package)
@@ -437,8 +485,8 @@ void start_game(Buttons_type buttons, SOCKET server, Map_type* map, SDL_package_
     int latency;
     int dummy;
     int player_number = -1;
-    
-    while(is_running)
+    char game_over = 0;
+    while(is_running && !game_over)
     {
         SDL_FillRect(package.screen, NULL, package.color);
         draw_map(&package, map);
@@ -448,7 +496,7 @@ void start_game(Buttons_type buttons, SOCKET server, Map_type* map, SDL_package_
             {
 			case SDL_KEYDOWN:
 
-                if(player_number != -1 && map->players[player_number].frozen <= 0)
+                if(player_number != -1 && map->players[player_number].frozen <= 0 && map->players[player_number].has_left == 0)
                 {
 			        if (event.key.keysym.sym == buttons.up) 
                     {
@@ -468,7 +516,14 @@ void start_game(Buttons_type buttons, SOCKET server, Map_type* map, SDL_package_
 				    }
                     else if(event.key.keysym.sym == buttons.action)
                     {
-                        send_key_to_server(server, "skill");
+                        if (check_if_on_exit(map, player_number))
+                        {
+                            send_key_to_server(server, "end_game");
+                        }
+                        else
+                        {
+                            send_key_to_server(server, "skill");
+                        }
 				    }
                 }
                 break;
@@ -479,7 +534,7 @@ void start_game(Buttons_type buttons, SOCKET server, Map_type* map, SDL_package_
 				break;
 			};
 		};
-        latency = ping_and_receive(server, map, &dummy, &player_number);
+        latency = ping_and_receive(server, map, &dummy, &player_number, &game_over);
         //SDL_QueryTexture(texture, NULL, NULL, &texW, &texH);
         SDL_UpdateTexture(package.texture, NULL, package.screen->pixels, package.screen->pitch);
         //SDL_RenderClear(package.renderer);
@@ -500,10 +555,10 @@ Buttons_type set_buttons(SDL_package_type package)
     {
         SDL_FillRect(package.screen, NULL, package.color);
         draw_text("Wybierz sterowanie: ", position_x, position_y, package);
-        draw_text("1 - strzalki", position_x, position_y + POSITION_Y, package);
-        draw_text("2 - WSAD", position_x, position_y + 2*POSITION_Y, package);
-        draw_text("3 - IJKL", position_x, position_y + 3*POSITION_Y, package);
-        draw_text("4 - TFGH", position_x, position_y + 4*POSITION_Y, package);
+        draw_text("1 - strzalki + prawy shift", position_x, position_y + POSITION_Y, package);
+        draw_text("2 - WSAD + E", position_x, position_y + 2*POSITION_Y, package);
+        draw_text("3 - IJKL + O", position_x, position_y + 3*POSITION_Y, package);
+        draw_text("4 - TFGH + Y", position_x, position_y + 4*POSITION_Y, package);
         while (SDL_PollEvent(&event))
         {
             switch (event.type)
@@ -607,6 +662,7 @@ int main(int argc, char** argv)
             if (initialize_players(buttons_set, server, map, package, important_treasure) == 0)
             {
                 start_game(buttons_set, server, map, package);
+                draw_end_game(&package, map);
             }
             close_connection_to_server(server);
         }

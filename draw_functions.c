@@ -176,7 +176,7 @@ void draw_players(SDL_package_type* package, Map_type* map)
 {
     for (int i = 0; i < NUMBER_OF_CLIENTS; i++)
     {
-        if (map->players[i].connected == 1 && map->players[i].ready == 1) 
+        if (map->players[i].connected == 1 && map->players[i].ready == 1 && map->players[i].has_left != 1) 
         {
             draw_surface(package, package->player_surfs[i], map->players[i].x, map->players[i].y );
             if (map->players[i].frozen > 0)
@@ -201,14 +201,6 @@ void draw_chests(SDL_package_type* package, Map_type* map)
     }
 }
 
-void draw_end_game(SDL_package_type* package, Map_type* map)
-{
-    char buf[128];
-    int position_y = 350;
-    sprintf(buf, "Koniec gry");
-    draw_text(buf, map->size * TEXTURE_SIZE + 10, position_y, *package);
-}
-
 void draw_skills(SDL_package_type* package, Map_type* map)
 {
     for (int i = 0; i < map->size; i++)
@@ -223,12 +215,48 @@ void draw_skills(SDL_package_type* package, Map_type* map)
     }
 
 }
+
+void draw_game_over(SDL_package_type* package, Map_type* map)
+{
+    int position_y = 50;
+    char buf[128];
+    SDL_Color temp = package->foregroundColor;
+    SDL_FillRect(package->screen, NULL, package->color);
+    draw_text("Koniec gry", SCREEN_WIDTH/2 - 20, position_y, *package);
+    position_y += POSITION_Y;
+    for (int i = 0; i < NUMBER_OF_CLIENTS; i++)
+    {
+        if (map->players[i].connected)
+        {
+            package->foregroundColor = package->player_colors[i];
+            sprintf(buf, "Nick: %s", map->players[i].nick);
+            draw_text(buf, SCREEN_WIDTH / 2 - 20, position_y, *package);
+            position_y += POSITION_Y;
+            sprintf(buf, "Punkty: %d", map->players[i].points);
+            draw_text(buf, SCREEN_WIDTH / 2 - 20, position_y, *package);
+            position_y += POSITION_Y;
+            if (!map->players[i].has_left)
+            {
+                draw_text("KARA ZA NIE BYCIE NA CZAS", SCREEN_WIDTH / 2 - 20, position_y, *package);
+                position_y += POSITION_Y;
+            }
+        }
+    }
+    package->foregroundColor = temp;
+}
+
 void draw_info(SDL_package_type* package, Map_type* map)
 {
     int position_y = 20;
     char buf[128];
     char number_holder[10];
     sprintf(buf, "Czas: %d", map->time);
+    char tab[NUMBER_OF_SKILLS+1][20];
+    strcpy(tab[0], "");
+    strcpy(tab[1], "kradziez");
+    strcpy(tab[2], "zamrozenie");
+    strcpy(tab[3], "przyspieszenie");
+    strcpy(tab[4], "teleportacja");
     draw_text(buf, map->size * TEXTURE_SIZE + 10, position_y, *package);
     position_y += POSITION_Y;
     for(int i=0;i<NUMBER_OF_CLIENTS;i++)
@@ -258,13 +286,14 @@ void draw_info(SDL_package_type* package, Map_type* map)
             }
             draw_text(buf, map->size * TEXTURE_SIZE + 10, position_y, *package);
             position_y += POSITION_Y;
-            sprintf(buf, "Umiejetnosc: %d", map->players[i].skill);
+            sprintf(buf, "Umiejetnosc: %s", tab[map->players[i].skill+1]);
             draw_text(buf, map->size * TEXTURE_SIZE + 10, position_y, *package);
             position_y += POSITION_Y;
             package->foregroundColor = temp;
         }
 	}
 }
+
 void draw_map(SDL_package_type* package, Map_type* map)
 {
     draw_labyrinth(package, map);
@@ -272,8 +301,4 @@ void draw_map(SDL_package_type* package, Map_type* map)
     draw_skills(package, map);
     draw_players(package, map);
     draw_info(package, map);
-    if (map->time == 0)
-    {
-        draw_end_game(package, map);
-    }
-}
+  }

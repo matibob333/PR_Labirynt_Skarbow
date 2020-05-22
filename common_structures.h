@@ -42,6 +42,8 @@ typedef struct Player_type
 	int frozen;
 	//przyspieszenie gracza
 	int speed;
+	// czy zakonczyl grę
+	int has_left;
 }Player_type;
 
 //struktura mapy

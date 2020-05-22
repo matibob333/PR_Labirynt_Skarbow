@@ -16,6 +16,8 @@ typedef struct Thread_args
 	Map_type* map;
 	//wskaznik na zmienna, czy gracze sa gotowi
 	int* everybody_ready;
+	//wskaznik na zmienna, czy gracze wyszli z labiryntu
+	int* everybody_left;
 	//uchwyt mutexa mapy
 	HANDLE map_mutex;
 	//uchwyt mutexa gotowoœci graczy
@@ -119,7 +121,7 @@ void serialize_map(char* data, Map_type* map)
 	}
 }
 
-void serialize_map_fully(char* data, Map_type* map, int *everybody_ready, int *player_number)
+void serialize_map_fully(char* data, Map_type* map, int *everybody_ready, int *player_number, char game_over)
 {
 	strcpy(data, "");
 	int position = 0;
@@ -151,6 +153,8 @@ void serialize_map_fully(char* data, Map_type* map, int *everybody_ready, int *p
 		position += sizeof(int);
 		memcpy(data + position, &(map->players[i].speed), sizeof(int));
 		position += sizeof(int);
+		memcpy(data + position, &(map->players[i].has_left), sizeof(int));
+		position += sizeof(int);
 	}
 	for(int j=0;j<map->size;j++)
 	{
@@ -166,6 +170,8 @@ void serialize_map_fully(char* data, Map_type* map, int *everybody_ready, int *p
 	position += sizeof(int);
 	memcpy(data + position, player_number, sizeof(int));
 	position += sizeof(int);
+	memcpy(data + position, &game_over, sizeof(char));
+	position += sizeof(char);
 }
 
 void send_important_treasure_id_to_client(SOCKET s, int id)
@@ -184,7 +190,7 @@ DWORD WINAPI time_thread(void* args)
 		do
 		{
 			Sleep(1000);
-			arguments->map->time--;
+			arguments->map->time++;
 		} while (arguments->map->time > 0);
 	}
 	ReleaseSemaphore(arguments->time_semaphore, 1, NULL);
@@ -202,7 +208,7 @@ DWORD WINAPI skills_thread(void* args)
 		Sleep(1000);
 	}
 	printf("Watek umiejetnosci zaczyna\n");
-	while (*(arguments->everybody_ready))
+	while (arguments->map->time != 0 && *(arguments->everybody_left) == 0)
 	{
 		Sleep(4000);
 		int x, y, skill_id;
@@ -231,14 +237,14 @@ DWORD WINAPI skills_thread(void* args)
 int find_best_player_index_excluding_arg_player(Map_type* map, int player)
 {
 	int best_score = 0;
-	int best_index = 0;
+	int best_index = -1;
 	for(int i=0;i<NUMBER_OF_CLIENTS;i++)
 	{
 		if(i==player)
 		{
 			continue;
 		}
-		if(map->players[i].connected)
+		if(map->players[i].connected && map->players[i].has_left == 0)
 		{
 			if(map->players[i].points > best_score)
 			{
@@ -265,29 +271,32 @@ void use_skill(Thread_args* args)
 		{
 			players[player_number].skill=-1;
 			int index = find_best_player_index_excluding_arg_player(args->map, player_number);
-			for(int i=0;i<NUMBER_OF_TREASURES;i++)
+			if (index >= 0)
 			{
-				if(players[index].treasures[i]==1)
+				for (int i = 0; i < NUMBER_OF_TREASURES; i++)
 				{
-					players[player_number].treasures[i] = 1;
-					players[index].treasures[i] = 0;
-					if(i==players[player_number].important_treasure)
+					if (players[index].treasures[i] == 1)
 					{
-						players[player_number].points += 100;
+						players[player_number].treasures[i] = 1;
+						players[index].treasures[i] = 0;
+						if (i == players[player_number].important_treasure)
+						{
+							players[player_number].points += 100;
+						}
+						else
+						{
+							players[player_number].points += 20;
+						}
+						if (i == players[index].important_treasure)
+						{
+							players[index].points -= 100;
+						}
+						else
+						{
+							players[index].points -= 20;
+						}
+						break;
 					}
-					else
-					{
-						players[player_number].points += 20;
-					}
-					if(i==players[index].important_treasure)
-					{
-						players[index].points -= 100;
-					}
-					else
-					{
-						players[index].points -= 20;
-					}
-					break;
 				}
 			}
 		}
@@ -298,7 +307,10 @@ void use_skill(Thread_args* args)
 		{
 			players[player_number].skill=-1;
 			int index = find_best_player_index_excluding_arg_player(args->map, player_number);
-			players[index].frozen = 250;
+			if (index >= 0)
+			{
+				players[index].frozen = 250;
+			}
 		}
 		ReleaseMutex(args->map_mutex);
 		break;
@@ -316,12 +328,15 @@ void use_skill(Thread_args* args)
 			int x_temp, y_temp;
 			players[player_number].skill=-1;
 			int index = find_best_player_index_excluding_arg_player(args->map, player_number);
-			x_temp = players[index].x;
-			y_temp = players[index].y;
-			players[index].x = players[player_number].x;
-			players[index].y = players[player_number].y;
-			players[player_number].x = x_temp;
-			players[player_number].y = y_temp;
+			if (index >= 0)
+			{
+				x_temp = players[index].x;
+				y_temp = players[index].y;
+				players[index].x = players[player_number].x;
+				players[index].y = players[player_number].y;
+				players[player_number].x = x_temp;
+				players[player_number].y = y_temp;
+			}
 		}
 		ReleaseMutex(args->map_mutex);
 		break;
@@ -337,7 +352,7 @@ DWORD WINAPI client_thread(void* args)
 	SOCKET client_socket = arguments->map->players[player_number].socket;
 	int byte_no = SIZE_OF_DATA;
 	int rd;
-	srand(time(NULL) * GetCurrentThreadId());
+	srand((unsigned int)time(NULL) * GetCurrentThreadId());
 	if(*(arguments->everybody_ready))
 	{
 		recv(client_socket, buf, STRING_LENGTH, 0);
@@ -437,7 +452,7 @@ DWORD WINAPI client_thread(void* args)
 				char* data = (char*)malloc(SIZE_OF_DATA);
 				if (WaitForSingleObject(arguments->map_mutex, INFINITE) == WAIT_OBJECT_0)
 				{
-					serialize_map_fully(data, arguments->map, arguments->everybody_ready, &player_number);
+					serialize_map_fully(data, arguments->map, arguments->everybody_ready, &player_number, 0);
 				}
 				ReleaseMutex(arguments->map_mutex);
 				send(client_socket, data, SIZE_OF_DATA, 0);
@@ -449,7 +464,7 @@ DWORD WINAPI client_thread(void* args)
 			}
 		}
 	}
-	int speed = SPEED;
+	int speed = SPEED; 
 	while (!lost_client)
 	{
 		if (recv(client_socket, buf, STRING_LENGTH, 0) > 0)
@@ -535,11 +550,22 @@ DWORD WINAPI client_thread(void* args)
 				char* data = (char*)malloc(SIZE_OF_DATA);
 				if (WaitForSingleObject(arguments->map_mutex, INFINITE) == WAIT_OBJECT_0)
 				{
-					serialize_map_fully(data, arguments->map, arguments->everybody_ready, &player_number);
+					if (*(arguments->everybody_left) == 1 || arguments->map->time == 0)
+					{
+						serialize_map_fully(data, arguments->map, arguments->everybody_ready, &player_number, 1);
+						ReleaseMutex(arguments->map_mutex);
+						send(client_socket, data, SIZE_OF_DATA, 0);
+						free(data);
+						break;
+					}
+					else
+					{
+						serialize_map_fully(data, arguments->map, arguments->everybody_ready, &player_number, 0);
+						ReleaseMutex(arguments->map_mutex);
+						send(client_socket, data, SIZE_OF_DATA, 0);
+						free(data);
+					}
 				}
-				ReleaseMutex(arguments->map_mutex);
-				send(client_socket, data, SIZE_OF_DATA, 0);
-				free(data);
 			}
 			else if (strcmp(buf, "chest")==0)
 			{
@@ -594,7 +620,27 @@ DWORD WINAPI client_thread(void* args)
 			}
 			else if (strcmp(buf, "end_game") == 0)
 			{
-				
+				if (WaitForSingleObject(arguments->map_mutex, INFINITE) == WAIT_OBJECT_0)
+				{
+					arguments->map->players[player_number].has_left = 1;
+				}
+				ReleaseMutex(arguments->map_mutex);
+				if (WaitForSingleObject(arguments->ready_mutex, INFINITE) == WAIT_OBJECT_0)
+				{
+					rd = 1;
+					for (int i = 0; i < NUMBER_OF_CLIENTS; i++)
+					{
+						if (arguments->map->players[i].connected)
+						{
+							if (!arguments->map->players[i].has_left)
+							{
+								rd = 0;
+							}
+						}
+					}
+					*(arguments->everybody_left) = rd;
+				}
+				ReleaseMutex(arguments->ready_mutex);
 			}
 			else if(strcmp(buf, "skill")==0)
 			{
@@ -621,13 +667,14 @@ DWORD WINAPI client_thread(void* args)
 			lost_client = 1;
 		}
 	}
+	
 	free(arguments);
 	return 0;
 }
 
 int main()
 {
-	srand(time(NULL) * GetCurrentThreadId());	
+	srand((unsigned int)time(NULL) * GetCurrentThreadId());	
 	HANDLE map_mutex, ready_mutex, time_semaphore;
 	map_mutex = CreateMutex(NULL, FALSE, NULL);
 	ready_mutex = CreateMutex(NULL, FALSE, NULL);
@@ -639,6 +686,7 @@ int main()
 	map.skills_number = 0;
 	map.time = -1;
 	int everybody_ready = 0;
+	int everybody_left = 0;
 	Thread_args *thread_args;
 	Player_type players[NUMBER_OF_CLIENTS];
 	for (int i = 0; i < NUMBER_OF_CLIENTS; i++) 
@@ -650,6 +698,7 @@ int main()
 		players[i].y = 0;
 		players[i].points = 0;
 		players[i].skill = -1;
+		players[i].has_left = 0;
 		int continue_drawing = 0;
 		do
 		{
@@ -699,6 +748,7 @@ int main()
 	DWORD id;
 	thread_args = (Thread_args*)malloc(sizeof(Thread_args));
 	thread_args->everybody_ready = &everybody_ready;
+	thread_args->everybody_left = &everybody_left;
 	thread_args->map_mutex = map_mutex;
 	thread_args->ready_mutex = ready_mutex;
 	thread_args->time_semaphore = time_semaphore;
@@ -706,6 +756,7 @@ int main()
 	CreateThread(NULL, 0, skills_thread, (void*)thread_args, 0, &id);
 	thread_args = (Thread_args*)malloc(sizeof(Thread_args));
 	thread_args->everybody_ready = &everybody_ready;
+	thread_args->everybody_left = &everybody_left;
 	thread_args->map_mutex = map_mutex;
 	thread_args->ready_mutex = ready_mutex;
 	thread_args->time_semaphore = time_semaphore;
@@ -719,6 +770,7 @@ int main()
 		
 		thread_args = (Thread_args*)malloc(sizeof(Thread_args));
 		thread_args->everybody_ready = &everybody_ready;
+		thread_args->everybody_left = &everybody_left;
 		thread_args->map_mutex = map_mutex;
 		thread_args->ready_mutex = ready_mutex;
 		thread_args->time_semaphore = time_semaphore;
