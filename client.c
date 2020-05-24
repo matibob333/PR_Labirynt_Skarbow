@@ -172,27 +172,23 @@ void start_game(Buttons_type buttons, SOCKET server, Map_type* map, SDL_package_
             {
 			case SDL_KEYDOWN:
 
-                if(player_number != -1 && map->players[player_number].has_left == 0)
+                if(player_number != -1 && map->players[player_number].has_left != 1)
                 {
 			        if (event.key.keysym.sym == buttons.up) 
                     {
                         send_key_to_server(server, "up");
-                        //make_proper_move(server, map, player_number, "up");
 			        }
 			        else if (event.key.keysym.sym == buttons.down) 
                     {
                         send_key_to_server(server, "down");
-                        //make_proper_move(server, map, player_number, "down");
 			        }
 				    else if (event.key.keysym.sym == buttons.right)                 
                     {	
                         send_key_to_server(server, "right");
-                        //make_proper_move(server, map, player_number, "right");
 				    }
 				    else if (event.key.keysym.sym == buttons.left) 
                     {
                         send_key_to_server(server, "left");
-                        //make_proper_move(server, map, player_number, "left");
 				    }
                     else if(event.key.keysym.sym == buttons.action)
                     {
