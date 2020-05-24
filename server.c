@@ -121,11 +121,7 @@ DWORD WINAPI client_thread(void* args)
 				get_ping_initialize(arguments);
 			}
 		}
-		else
-		{
-			arguments->map->players[player_number].connected = 0;
-			lost_client = 1;
-		}
+	
 	}
 	int speed = SPEED; 
 	while (!lost_client)
@@ -172,7 +168,7 @@ DWORD WINAPI client_thread(void* args)
 		{
 			printf("Lost connection to client\n");
 			lost_client = 1;
-			arguments->map->players[player_number].connected = 0;
+			//arguments->map->players[player_number].connected = 0;
 		}
 	}
 	

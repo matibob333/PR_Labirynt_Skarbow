@@ -18,9 +18,12 @@ void deserialize_map_fully(char* data, Map_type* map, int* everybody_ready, int*
         int nick_length;
         memcpy(&nick_length, data + position, sizeof(int));
         position += sizeof(int);
-        memcpy(map->players[i].nick, data + position, nick_length);
-        map->players[i].nick[nick_length] = '\0';
-        position += nick_length;
+        if (nick_length >= 0 && nick_length <= STRING_LENGTH)
+        {
+            memcpy(map->players[i].nick, data + position, nick_length);
+            map->players[i].nick[nick_length] = '\0';
+            position += nick_length;
+        }
         for (int j = 0; j < NUMBER_OF_TREASURES; j++)
         {
             memcpy(&(map->players[i].treasures[j]), data + position, sizeof(int));

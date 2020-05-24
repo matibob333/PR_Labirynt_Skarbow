@@ -65,7 +65,7 @@ int initialize_players(Buttons_type buttons, SOCKET server, Map_type* map, SDL_p
     int quit = 0;
     int player_number;
     char treasure_name[20];
-    while (!everybody_ready && !quit)
+    while (everybody_ready != 1 && !quit)
     {
         SDL_FillRect(package.screen, NULL, package.color);
         for (int i = 0; i < NUMBER_OF_CLIENTS; i++)
