@@ -138,14 +138,14 @@ DWORD WINAPI client_thread(void* args)
 					break;
 				}
 			}
-			else if (strcmp(buf, "chest")==0)
+			/*else if (strcmp(buf, "chest")==0)
 			{
 				get_chest(arguments);
 			}
 			else if (strcmp(buf, "get_skill")==0)
 			{
 				get_skill(arguments);
-			}
+			}*/
 			else if (strcmp(buf, "end_game") == 0)
 			{
 				end_game(arguments);

@@ -90,6 +90,7 @@ int initialize_players(Buttons_type buttons, SOCKET server, Map_type* map, SDL_p
             case SDL_KEYDOWN:
                 if (event.key.keysym.sym == buttons.action)
                 {
+
                     if (ready == 0)
                     {
                         send_key_to_server(server, "ready");
@@ -114,7 +115,6 @@ int initialize_players(Buttons_type buttons, SOCKET server, Map_type* map, SDL_p
         SDL_UpdateTexture(package.texture, NULL, package.screen->pixels, package.screen->pitch);
         SDL_RenderCopy(package.renderer, package.texture, NULL, NULL);
         SDL_RenderPresent(package.renderer);
-        Sleep(16);
     }
     return quit;
 }
@@ -162,7 +162,7 @@ void start_game(Buttons_type buttons, SOCKET server, Map_type* map, SDL_package_
     int dummy;
     int player_number = -1;
     char game_over = 0;
-    while(is_running && !game_over)
+    while(is_running && game_over != 1)
     {
         SDL_FillRect(package.screen, NULL, package.color);
         draw_map(&package, map);
@@ -172,23 +172,27 @@ void start_game(Buttons_type buttons, SOCKET server, Map_type* map, SDL_package_
             {
 			case SDL_KEYDOWN:
 
-                if(player_number != -1 && map->players[player_number].frozen <= 0 && map->players[player_number].has_left == 0)
+                if(player_number != -1 && map->players[player_number].has_left == 0)
                 {
 			        if (event.key.keysym.sym == buttons.up) 
                     {
-                        make_proper_move(server, map, player_number, "up");
+                        send_key_to_server(server, "up");
+                        //make_proper_move(server, map, player_number, "up");
 			        }
 			        else if (event.key.keysym.sym == buttons.down) 
                     {
-                        make_proper_move(server, map, player_number, "down");
+                        send_key_to_server(server, "down");
+                        //make_proper_move(server, map, player_number, "down");
 			        }
 				    else if (event.key.keysym.sym == buttons.right)                 
                     {	
-                        make_proper_move(server, map, player_number, "right");
+                        send_key_to_server(server, "right");
+                        //make_proper_move(server, map, player_number, "right");
 				    }
 				    else if (event.key.keysym.sym == buttons.left) 
                     {
-                        make_proper_move(server, map, player_number, "left");
+                        send_key_to_server(server, "left");
+                        //make_proper_move(server, map, player_number, "left");
 				    }
                     else if(event.key.keysym.sym == buttons.action)
                     {
@@ -210,11 +214,17 @@ void start_game(Buttons_type buttons, SOCKET server, Map_type* map, SDL_package_
 				break;
 			};
 		};
-        latency = ping_and_receive(server, map, &dummy, &player_number, &game_over);
+        if (player_number >= 0 && player_number <= 4)
+        {
+            latency = ping_and_receive(server, map, &dummy, &dummy, &game_over);
+        }
+        else
+        {
+            latency = ping_and_receive(server, map, &dummy, &player_number, &game_over);
+        }
         SDL_UpdateTexture(package.texture, NULL, package.screen->pixels, package.screen->pitch);
         SDL_RenderCopy(package.renderer, package.texture, NULL, NULL);
         SDL_RenderPresent(package.renderer);
-        Sleep(16);
     }
 }
 

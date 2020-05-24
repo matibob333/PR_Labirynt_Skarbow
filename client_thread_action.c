@@ -1,5 +1,130 @@
 #include "client_thread_action.h"
 
+void move_player(Thread_args* arguments, const char* buf)
+{
+	int vertical;
+	int horizontal;
+	int delta_vertical=0;
+	int delta_horizontal=0;
+	int border_horizontal=0;
+	int border_vertical=0;
+	int vertical_border=0;
+	int horizontal_border=0;
+	int x=0; 
+	int y=0; 
+	int player_number = arguments->player_number;
+	int speed = SPEED;
+	if (arguments->map->players[player_number].frozen > 0)
+	{
+		return;
+	}
+	if (arguments->map->players[player_number].speed > 0)
+	{
+		speed = NEW_SPEED;
+	}
+	else
+	{
+		speed = SPEED;
+	}
+	if (strcmp(buf, "up") == 0)
+	{
+		printf("Player number %d sent UP\n", player_number);
+		if (WaitForSingleObject(arguments->map_mutex, INFINITE) == WAIT_OBJECT_0)
+		{
+			if (arguments->map->players[player_number].y % NEW_SPEED != 0)
+			{
+				speed = SPEED;
+			}
+		}
+		ReleaseMutex(arguments->map_mutex);
+		x = 0;
+		y = -speed;
+		//arguments->map->players[player_number].y -= speed;
+		delta_vertical = -speed;
+		delta_horizontal = 0;
+		border_horizontal = TEXTURE_SIZE - 1;
+		border_vertical = 0;
+	}
+	else if (strcmp(buf, "down") == 0)
+	{
+		printf("Player number %d sent DOWN\n", player_number);
+		if (WaitForSingleObject(arguments->map_mutex, INFINITE) == WAIT_OBJECT_0)
+		{
+			if (arguments->map->players[player_number].y % NEW_SPEED != 0)
+			{
+				speed = SPEED;
+			}
+		}
+		ReleaseMutex(arguments->map_mutex);
+		x = 0;
+		y = speed;
+		delta_vertical = speed + TEXTURE_SIZE - 1;
+		delta_horizontal = 0;
+		border_horizontal = TEXTURE_SIZE - 1;
+		border_vertical = 0;
+	}
+	else if (strcmp(buf, "right") == 0)
+	{
+		printf("Player number %d sent RIGHT\n", player_number);
+		if (WaitForSingleObject(arguments->map_mutex, INFINITE) == WAIT_OBJECT_0)
+		{
+			if (arguments->map->players[player_number].x % NEW_SPEED != 0)
+			{
+				speed = SPEED;
+			}
+		}
+		ReleaseMutex(arguments->map_mutex);
+		x = speed;
+		y = 0;
+		delta_vertical = 0;
+		delta_horizontal = speed + TEXTURE_SIZE - 1;
+		border_vertical = TEXTURE_SIZE - 1;
+		border_horizontal = 0;
+	}
+	else if (strcmp(buf, "left") == 0)
+	{
+		printf("Player number %d sent LEFT\n", player_number);
+		if (WaitForSingleObject(arguments->map_mutex, INFINITE) == WAIT_OBJECT_0)
+		{
+			if (arguments->map->players[player_number].x % NEW_SPEED != 0)
+			{
+				speed = SPEED;
+			}
+		}
+		ReleaseMutex(arguments->map_mutex);
+		x = -speed;
+		y = 0;
+		delta_vertical = 0;
+		delta_horizontal = -speed;
+		border_vertical = TEXTURE_SIZE - 1;
+		border_horizontal = 0;
+	}
+	vertical = (arguments->map->players[player_number].y + delta_vertical) / TEXTURE_SIZE;
+	horizontal = (arguments->map->players[player_number].x + delta_horizontal) / TEXTURE_SIZE;
+	vertical_border = ((arguments->map->players[player_number].y + delta_vertical + border_vertical) / TEXTURE_SIZE);
+	horizontal_border = ((arguments->map->players[player_number].x + delta_horizontal + border_horizontal) / TEXTURE_SIZE);
+	if (arguments->map->labyrinth[vertical][horizontal] != WALL && arguments->map->labyrinth[vertical_border][horizontal_border] != WALL)
+	{
+		if ((arguments->map->labyrinth[vertical][horizontal] >= TREASURE_OFFSET && arguments->map->labyrinth[vertical][horizontal] < TREASURE_OFFSET + NUMBER_OF_TREASURES) || (arguments->map->labyrinth[vertical_border][horizontal_border] >= TREASURE_OFFSET && arguments->map->labyrinth[vertical_border][horizontal_border] < TREASURE_OFFSET + NUMBER_OF_TREASURES))
+		{
+			arguments->map->players[player_number].x += x;
+			arguments->map->players[player_number].y += y;
+			get_chest(arguments);
+		}
+		else if ((arguments->map->labyrinth[vertical][horizontal] >= SKILL_OFFSET && arguments->map->labyrinth[vertical][horizontal] < SKILL_OFFSET + NUMBER_OF_SKILLS) || (arguments->map->labyrinth[vertical_border][horizontal_border] >= SKILL_OFFSET && arguments->map->labyrinth[vertical_border][horizontal_border] < SKILL_OFFSET + NUMBER_OF_SKILLS))
+		{
+			arguments->map->players[player_number].x += x;
+			arguments->map->players[player_number].y += y;
+			get_skill(arguments);
+		}
+		else
+		{
+			arguments->map->players[player_number].x += x;
+			arguments->map->players[player_number].y += y;
+		}
+	}
+}
+
 void disconnect(Thread_args* arguments)
 {
 	int player_number = arguments->player_number;
@@ -203,72 +328,6 @@ int get_ping_game(Thread_args* arguments)
 		}
 	}
 	return 0;
-}
-
-void move_player(Thread_args* arguments, const char* buf)
-{
-	int player_number = arguments->player_number;
-	int speed = SPEED;
-	if (arguments->map->players[player_number].speed > 0)
-	{
-		speed = NEW_SPEED;
-	}
-	else
-	{
-		speed = SPEED;
-	}
-	if (strcmp(buf, "up") == 0)
-	{
-		printf("Player number %d sent UP\n", player_number);
-		if (WaitForSingleObject(arguments->map_mutex, INFINITE) == WAIT_OBJECT_0)
-		{
-			if(arguments->map->players[player_number].y % NEW_SPEED != 0)
-			{
-				speed = SPEED;
-			}
-			arguments->map->players[player_number].y-= speed;
-		}
-		ReleaseMutex(arguments->map_mutex);
-	}
-	else if (strcmp(buf, "down") == 0)
-	{
-		printf("Player number %d sent DOWN\n", player_number);
-		if (WaitForSingleObject(arguments->map_mutex, INFINITE) == WAIT_OBJECT_0)
-		{
-			if(arguments->map->players[player_number].y % NEW_SPEED != 0)
-			{
-				speed = SPEED;
-			}
-			arguments->map->players[player_number].y+= speed;
-		}
-		ReleaseMutex(arguments->map_mutex);
-	}
-	else if (strcmp(buf, "right") == 0)
-	{
-		printf("Player number %d sent RIGHT\n", player_number);
-		if (WaitForSingleObject(arguments->map_mutex, INFINITE) == WAIT_OBJECT_0)
-		{
-			if(arguments->map->players[player_number].x % NEW_SPEED != 0)
-			{
-				speed = SPEED;
-			}
-			arguments->map->players[player_number].x+=speed;
-		}
-		ReleaseMutex(arguments->map_mutex);
-	}
-	else if (strcmp(buf, "left") == 0)
-	{
-		printf("Player number %d sent LEFT\n", player_number);
-		if (WaitForSingleObject(arguments->map_mutex, INFINITE) == WAIT_OBJECT_0)
-		{
-			if(arguments->map->players[player_number].x % NEW_SPEED != 0)
-			{
-				speed = SPEED;
-			}
-			arguments->map->players[player_number].x-=speed;
-		}
-		ReleaseMutex(arguments->map_mutex);
-	}
 }
 
 void use_skill(Thread_args* args)

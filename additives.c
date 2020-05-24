@@ -68,7 +68,7 @@ void set_exit(Map_type* map)
 
 int find_best_player_index_excluding_arg_player(Map_type* map, int player)
 {
-	int best_score = 0;
+	int best_score = -1;
 	int best_index = -1;
 	for (int i = 0; i < NUMBER_OF_CLIENTS; i++)
 	{
@@ -84,10 +84,6 @@ int find_best_player_index_excluding_arg_player(Map_type* map, int player)
 				best_score = map->players[i].points;
 			}
 		}
-	}
-	if (best_index == player)
-	{
-		best_index = (best_index + 1) % NUMBER_OF_CLIENTS;
 	}
 	return best_index;
 }

@@ -19,7 +19,5 @@ typedef struct Buttons_type
 
 void send_key_to_server(SOCKET s, const char* key);
 
-void make_proper_move(SOCKET server, Map_type* map, int player_number, const char* command);
-
 int check_if_on_exit(Map_type* map, int player_number);
 

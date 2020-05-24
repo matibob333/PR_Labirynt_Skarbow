@@ -1,7 +1,7 @@
 #pragma once
 #define NUMBER_OF_CLIENTS 4
 #define PORT 7777
-#define SIZE_OF_DATA 4096
+#define SIZE_OF_DATA 2048
 #define STRING_LENGTH 20
 #define SPEED 4
 #define NEW_SPEED 8
