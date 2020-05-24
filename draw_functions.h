@@ -1,12 +1,21 @@
+<<<<<<< HEAD
 #define _CRT_SECURE_NO_WARNINGS
+=======
+>>>>>>> devel
 #include <SDL.h>
 #include <SDL_ttf.h>
 #include "../../../common/common_structures.h"
 
+<<<<<<< HEAD
 #define FONT_SIZE 16
 #define POSITION_Y 35
 #define SCREEN_WIDTH 900
 #define SCREEN_HEIGHT 640
+=======
+#define FONT_SIZE 10
+#define SCREEN_WIDTH 640
+#define SCREEN_HEIGHT 480
+>>>>>>> devel
 
 //struktura za³adowanych zmiennych SDL
 typedef struct SDL_package_type
@@ -33,18 +42,24 @@ typedef struct SDL_package_type
 	SDL_Surface* floor;
 	//tablica tekstur graczy
 	SDL_Surface* player_surfs[NUMBER_OF_CLIENTS];
+<<<<<<< HEAD
 	//tablica kolorow graczy
 	SDL_Color player_colors[NUMBER_OF_CLIENTS];
+=======
+>>>>>>> devel
 	//tekstura skrzyni
 	SDL_Surface* chest;
 	//teksura umiejetnosci
 	SDL_Surface* skill;
+<<<<<<< HEAD
 	//teksura zamra¿ania
 	SDL_Surface* frozen;
 	//ikona pocz¹tkowa
 	SDL_Surface* icon;
 	//wyjœcie z labiryntu
 	SDL_Surface* exit;
+=======
+>>>>>>> devel
 }SDL_package_type;
 
 //nadaje pocz¹tkowe wartoœci paczce SDL
@@ -66,6 +81,7 @@ void draw_labyrinth(SDL_package_type* package, Map_type* map);
 void draw_players(SDL_package_type* package, Map_type* map);
 
 //rysuje skrzynie
+<<<<<<< HEAD
 void draw_chests(SDL_package_type* package, Map_type* map);
 
 //rysuje umiejetnosci
@@ -76,3 +92,6 @@ void draw_info(SDL_package_type* package, Map_type* map);
 
 //rysuje ekran koncowy
 void draw_game_over(SDL_package_type* package, Map_type* map);
+=======
+void draw_chests(SDL_package_type* package, Map_type* map);
+>>>>>>> devel

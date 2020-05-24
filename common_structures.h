@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 #pragma once
 #define NUMBER_OF_CLIENTS 4
 #define PORT 7777
@@ -14,6 +15,13 @@
 #define WALL 0
 #define FLOOR 1
 #define EXIT 2
+=======
+#define NUMBER_OF_CLIENTS 4
+#define PORT 7777
+#define SIZE_OF_DATA 1024
+#define STRING_LENGTH 20
+#define LOCALHOST "127.0.0.1"
+>>>>>>> devel
 #include<winsock.h>
 
 //struktura danych gracza
@@ -33,6 +41,7 @@ typedef struct Player_type
 	SOCKET socket;
 	//czy gracz jest połączony
 	int connected;
+<<<<<<< HEAD
 	// skarby zebrane przez gracza
 	int treasures[NUMBER_OF_TREASURES];
 	// najważniejszy skarb gracza
@@ -45,6 +54,8 @@ typedef struct Player_type
 	int speed;
 	// czy zakonczyl grę
 	int has_left;
+=======
+>>>>>>> devel
 }Player_type;
 
 //struktura mapy
@@ -56,6 +67,7 @@ typedef struct Map_type
 	Player_type* players;
 	//dane labiryntu
 	unsigned char** labyrinth;
+<<<<<<< HEAD
 	// obecna liczba umiętności
 	int skills_number;
 	//mierzony czas
@@ -80,3 +92,6 @@ typedef struct Thread_args
 	//uchwyt semafora czasu
 	HANDLE time_semaphore;
 }Thread_args;
+=======
+}Map_type;
+>>>>>>> devel
