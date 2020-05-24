@@ -5,161 +5,30 @@
 #include <SDL.h>
 #include <SDL_ttf.h>
 #include "draw_functions.h"
+#include "connection.h"
+#include "players.h"
 
 #pragma comment(lib, "Ws2_32.lib")
 
-void recive_labyrinth_from_server(SOCKET s, Map_type* map)
-{
-    char* int_holder = (char*)malloc(sizeof(int));
-    recv(s, int_holder, sizeof(int), 0);
-    memcpy(&(map->size), int_holder, sizeof(int));
-    map->labyrinth = (unsigned char**)malloc(map->size * sizeof(unsigned char*));
-    for (int i = 0; i < map->size; i++)
-    {
-        map->labyrinth[i] = (unsigned char*)malloc(map->size * (sizeof(unsigned char)));
-        recv(s, map->labyrinth[i], map->size, 0);
-    }
-    free(int_holder);
-}
-
-typedef struct Buttons_type
-{
-    //przycisk ruchu w górê
-    SDL_Keycode up;
-    //przycisk ruchu w dó³
-    SDL_Keycode down;
-    //przycisk ruchu w prawo
-    SDL_Keycode right;
-    //przycisk ruchu w lewo
-    SDL_Keycode left;
-    //przycisk akcji
-    SDL_Keycode action;
-}Buttons_type;
-
-
-void deserialize_map(char* data, Map_type* map)
-{
-    int position = 0;
-    for (int i = 0; i < NUMBER_OF_CLIENTS; i++)
-    {
-        memcpy(&(map->players[i].x), data + position, sizeof(int));
-        position += sizeof(int);
-        memcpy(&(map->players[i].y), data + position, sizeof(int));
-        position += sizeof(int);
-        memcpy(&(map->players[i].points), data + position, sizeof(int));
-        position += sizeof(int);
-        memcpy(&(map->players[i].connected), data + position, sizeof(int));
-        position += sizeof(int);
-    }
-}
-
-void deserialize_map_fully(char* data, Map_type* map, int *everybody_ready)
-{
-    int position = 0;
-    for (int i = 0; i < NUMBER_OF_CLIENTS; i++)
-    {
-        memcpy(&(map->players[i].x), data + position, sizeof(int));
-        position += sizeof(int);
-        memcpy(&(map->players[i].y), data + position, sizeof(int));
-        position += sizeof(int);
-        memcpy(&(map->players[i].ready), data + position, sizeof(int));
-        position += sizeof(int);
-        memcpy(&(map->players[i].connected), data + position, sizeof(int));
-        position += sizeof(int);
-        memcpy(&(map->players[i].points), data + position, sizeof(int));
-        position += sizeof(int);
-        int nick_length;
-        memcpy(&nick_length, data + position, sizeof(int));
-        position += sizeof(int);
-        memcpy(map->players[i].nick, data + position, nick_length);
-        map->players[i].nick[nick_length] = '\0';
-        position += nick_length;
-    }
-    memcpy(everybody_ready, data + position, sizeof(int));
-}
-
-
-int ping_server(SOCKET s)
-{
-    int latency = 0;
-    char buf[STRING_LENGTH];
-    clock_t start, end;
-    strcpy(buf, "ping");
-    send(s, buf, STRING_LENGTH, 0);
-    start = clock();
-    if (recv(s, buf, STRING_LENGTH, 0) > 0)
-    {
-        end = clock();
-        latency = (end - start) / (CLOCKS_PER_SEC / 1000);
-        buf[5] = '\0';
-    }
-    else
-    {
-        printf("Ping lost\n");
-    }
-    return latency;
-}
-
-void close_connection_to_server(SOCKET s)
-{
-    char buf[STRING_LENGTH];
-    strcpy(buf, "disconnect");
-    send(s, buf, STRING_LENGTH, 0);
-    closesocket(s);
-    WSACleanup();
-}
-
-void send_key_to_server(SOCKET s, const char* key)
-{
-    char buf[STRING_LENGTH];
-    strcpy(buf, key);
-    send(s, buf, STRING_LENGTH, 0);
-}
-
-void receive_data_from_server(SOCKET s, Map_type* map)
-{
-    char* data = (char*)malloc(SIZE_OF_DATA);
-    recv(s, data, SIZE_OF_DATA, 0);
-    deserialize_map(data, map);
-    free(data);
-}
-
-void receive_full_data_from_server(SOCKET s, Map_type* map, int* everybody_ready)
-{
-    char* data = (char*)malloc(SIZE_OF_DATA);
-    recv(s, data, SIZE_OF_DATA, 0);
-    deserialize_map_fully(data, map, everybody_ready);
-    free(data);
-}
-
-int ping_and_receive(SOCKET s, Map_type* map, int *everybody_ready)
-{
-    char buf[STRING_LENGTH];
-    int latency = ping_server(s);
-    recv(s, buf, STRING_LENGTH, 0);
-    if (strcmp(buf, "map") == 0)
-    {
-        receive_data_from_server(s, map);
-    }
-    else if (strcmp(buf, "full_map") == 0)
-    {
-        receive_full_data_from_server(s, map, everybody_ready);
-    }
-    return latency;
-}
-
-void load_nickname(SDL_package_type package, char* nick) 
+int load_nickname(SDL_package_type package, char* nick)
 {
     SDL_bool done = SDL_FALSE;
     SDL_Event event;
     char text[128];
+    char title[128];
+    int position_x = 350;
+    int position_y = 100;
+    sprintf(title, "Labirynt skarbów");
     sprintf(text, "Podaj swoj nick: ");
     sprintf(nick, "\0");
-    while (!done)
+    int quit = 0;
+    while (!done && !quit)
     {
         SDL_FillRect(package.screen, NULL, package.color);
-        draw_text(nick, 100, 100, package);
-        draw_text(text, 100, 50, package);
+        draw_surface(&package, package.icon, position_x, position_y);
+        draw_text(title, position_x, position_y + 140, package);
+        draw_text(text, position_x, position_y + 220, package);
+        draw_text(nick, position_x, position_y + 260, package);
         if (SDL_PollEvent(&event))
         {
             switch (event.type)
@@ -173,55 +42,30 @@ void load_nickname(SDL_package_type package, char* nick)
             case SDL_TEXTINPUT:
                 strcat(nick, event.text.text); //wczytywanie nicku
                 break;
-
+            case SDL_QUIT:
+                quit = 1;
+                break;
             }
         }
         SDL_UpdateTexture(package.texture, NULL, package.screen->pixels, package.screen->pitch);
-        //SDL_RenderClear(package.renderer);
         SDL_RenderCopy(package.renderer, package.texture, NULL, NULL);
         SDL_RenderPresent(package.renderer);
     }
+    return quit;
 }
 
-SOCKET connect_to_server(const char* address, char* nick, Map_type* map)
+int initialize_players(Buttons_type buttons, SOCKET server, Map_type* map, SDL_package_type package, int important_treasure)
 {
-    SOCKET s;
-    struct sockaddr_in sa;
-    WSADATA wsas;
-    WORD version;
-    int result;
-    version = MAKEWORD(2, 0);
-    WSAStartup(version, &wsas);
-    s = socket(AF_INET, SOCK_STREAM, 0);
-    memset((void*)(&sa), 0, sizeof(sa));
-    sa.sin_family = AF_INET;
-    sa.sin_port = htons(PORT);
-    sa.sin_addr.s_addr = inet_addr(address);
-    result = connect(s, (struct sockaddr FAR*) & sa, sizeof(sa));
-    char buf[STRING_LENGTH];
-    if (result == SOCKET_ERROR)
-    {
-        return 0;
-    }
-    else
-    {
-        strcpy(buf, "connect");
-        send(s, buf, STRING_LENGTH, 0);
-        strcpy(buf, nick);
-        send(s, buf, STRING_LENGTH, 0);
-        recive_labyrinth_from_server(s,map);
-        return s;
-    }
-}
-int initialize_players(Buttons_type buttons, SOCKET server, Map_type* map, SDL_package_type package)
-{
-    char buf[STRING_LENGTH];
+    int position_x = 150;
+    int position_y = 120;
     int latency;
     SDL_Event event;
     int ready = 0;
     int everybody_ready = 0;
     int quit = 0;
-    while(!everybody_ready && !quit)
+    int player_number;
+    char treasure_name[20];
+    while (!everybody_ready && !quit)
     {
         SDL_FillRect(package.screen, NULL, package.color);
         for (int i = 0; i < NUMBER_OF_CLIENTS; i++)
@@ -233,46 +77,81 @@ int initialize_players(Buttons_type buttons, SOCKET server, Map_type* map, SDL_p
                 {
                     package.foregroundColor = (SDL_Color){ 0, 255, 0 };
                 }
-                draw_text(map->players[i].nick, 100, 100 + 20 * i, package);
+                draw_text(map->players[i].nick, position_x + 90 * i, position_y, package);
             }
         }
+        sprintf(treasure_name, "Twoj skarb: %d", important_treasure);
+        draw_text(treasure_name, position_x + 200, position_y + 200, package);
         package.foregroundColor = (SDL_Color){ 255, 255, 255 };
         while (SDL_PollEvent(&event))
         {
-            switch (event.type) 
+            switch (event.type)
             {
             case SDL_KEYDOWN:
                 if (event.key.keysym.sym == buttons.action)
                 {
-                    if(ready==0)
+                    if (ready == 0)
                     {
-                        strcpy(buf, "ready");
-                        send(server, buf, STRING_LENGTH, 0);
+                        send_key_to_server(server, "ready");
                         ready = 1;
-					}
+                    }
                     else
                     {
-                        strcpy(buf, "not_ready");
-                        send(server, buf, STRING_LENGTH, 0);
+                        send_key_to_server(server, "not_ready");
                         ready = 0;
-					}
-				} 
+                    }
+                }
                 break;
             case SDL_KEYUP:
                 break;
             case SDL_QUIT:
                 quit = 1;
                 break;
-			}
-		}
-        latency = ping_and_receive(server, map, &everybody_ready);
+            }
+        }
+        char dummy;
+        latency = ping_and_receive(server, map, &everybody_ready, &player_number, &dummy);
         SDL_UpdateTexture(package.texture, NULL, package.screen->pixels, package.screen->pitch);
-        //SDL_RenderClear(package.renderer);
         SDL_RenderCopy(package.renderer, package.texture, NULL, NULL);
         SDL_RenderPresent(package.renderer);
         Sleep(16);
-	}
+    }
     return quit;
+}
+
+void draw_end_game(SDL_package_type* package, Map_type* map)
+{
+    int quit = 0;
+    SDL_Event event;
+    for (int i = 0; i < NUMBER_OF_CLIENTS; i++)
+    {
+        if (map->players[i].connected)
+        {
+            if (!map->players[i].has_left)
+            {
+                map->players[i].points /= 2;
+            }
+        }
+    }
+    while (!quit)
+    {
+        draw_game_over(package, map);
+        while (SDL_PollEvent(&event))
+        {
+            switch (event.type)
+            {
+            case SDL_KEYDOWN:
+                quit = 1;
+                break;
+            case SDL_QUIT:
+                quit = 1;
+                break;
+            }
+        }
+        SDL_UpdateTexture(package->texture, NULL, package->screen->pixels, package->screen->pitch);
+        SDL_RenderCopy(package->renderer, package->texture, NULL, NULL);
+        SDL_RenderPresent(package->renderer);
+    }
 }
 
 void start_game(Buttons_type buttons, SOCKET server, Map_type* map, SDL_package_type package)
@@ -281,26 +160,49 @@ void start_game(Buttons_type buttons, SOCKET server, Map_type* map, SDL_package_
     int is_running = 1;
     int latency;
     int dummy;
-    while(is_running)
+    int player_number = -1;
+    char game_over = 0;
+    while(is_running && !game_over)
     {
         SDL_FillRect(package.screen, NULL, package.color);
         draw_map(&package, map);
-        while (SDL_PollEvent(&event)) {
-			switch (event.type) {
+        while (SDL_PollEvent(&event)) 
+        {
+			switch (event.type) 
+            {
 			case SDL_KEYDOWN:
-			    if (event.key.keysym.sym == buttons.up) {
-                    send_key_to_server(server, "up");
-			    }
-			    else if (event.key.keysym.sym == buttons.down) {
-                    send_key_to_server(server, "down");
-			    }
-				else if (event.key.keysym.sym == buttons.right) {	
-                    send_key_to_server(server, "right");
-				}
-				else if (event.key.keysym.sym == buttons.left) {
-                    send_key_to_server(server, "left");
-				}
-				break;
+
+                if(player_number != -1 && map->players[player_number].frozen <= 0 && map->players[player_number].has_left == 0)
+                {
+			        if (event.key.keysym.sym == buttons.up) 
+                    {
+                        make_proper_move(server, map, player_number, "up");
+			        }
+			        else if (event.key.keysym.sym == buttons.down) 
+                    {
+                        make_proper_move(server, map, player_number, "down");
+			        }
+				    else if (event.key.keysym.sym == buttons.right)                 
+                    {	
+                        make_proper_move(server, map, player_number, "right");
+				    }
+				    else if (event.key.keysym.sym == buttons.left) 
+                    {
+                        make_proper_move(server, map, player_number, "left");
+				    }
+                    else if(event.key.keysym.sym == buttons.action)
+                    {
+                        if (check_if_on_exit(map, player_number))
+                        {
+                            send_key_to_server(server, "end_game");
+                        }
+                        else
+                        {
+                            send_key_to_server(server, "skill");
+                        }
+				    }
+                }
+                break;
 			case SDL_KEYUP:
 				break;
 			case SDL_QUIT:
@@ -308,10 +210,8 @@ void start_game(Buttons_type buttons, SOCKET server, Map_type* map, SDL_package_
 				break;
 			};
 		};
-        latency = ping_and_receive(server, map, &dummy);
-        //SDL_QueryTexture(texture, NULL, NULL, &texW, &texH);
+        latency = ping_and_receive(server, map, &dummy, &player_number, &game_over);
         SDL_UpdateTexture(package.texture, NULL, package.screen->pixels, package.screen->pitch);
-        //SDL_RenderClear(package.renderer);
         SDL_RenderCopy(package.renderer, package.texture, NULL, NULL);
         SDL_RenderPresent(package.renderer);
         Sleep(16);
@@ -320,17 +220,19 @@ void start_game(Buttons_type buttons, SOCKET server, Map_type* map, SDL_package_
 
 Buttons_type set_buttons(SDL_package_type package)
 {
+    int position_x = 350;
+    int position_y = 100;
     Buttons_type buttons = (Buttons_type){ 0, 0, 0, 0, 0 };
     SDL_Event event;
     int choice = 1;
     while (choice)
     {
         SDL_FillRect(package.screen, NULL, package.color);
-        draw_text("Wybierz sterowanie", 100, 100, package);
-        draw_text("1 - strzalki", 100, 120, package);
-        draw_text("2 - WSAD", 100, 140, package);
-        draw_text("3 - IJKL", 100, 160, package);
-        draw_text("4 - TFGH", 100, 180, package);
+        draw_text("Wybierz sterowanie: ", position_x, position_y, package);
+        draw_text("1 - strzalki + prawy shift", position_x, position_y + POSITION_Y, package);
+        draw_text("2 - WSAD + E", position_x, position_y + 2*POSITION_Y, package);
+        draw_text("3 - IJKL + O", position_x, position_y + 3*POSITION_Y, package);
+        draw_text("4 - TFGH + Y", position_x, position_y + 4*POSITION_Y, package);
         while (SDL_PollEvent(&event))
         {
             switch (event.type)
@@ -382,7 +284,6 @@ Buttons_type set_buttons(SDL_package_type package)
             }
         }
         SDL_UpdateTexture(package.texture, NULL, package.screen->pixels, package.screen->pitch);
-        //SDL_RenderClear(package.renderer);
         SDL_RenderCopy(package.renderer, package.texture, NULL, NULL);
         SDL_RenderPresent(package.renderer);
     }
@@ -414,17 +315,31 @@ int main(int argc, char** argv)
         return 1;
     }
     char* nick = (char*)malloc(STRING_LENGTH); 
-    load_nickname(package, nick);
+    int important_treasure = -1;
+    int quit = load_nickname(package, nick);
+    if(quit)
+    {
+        SDL_FreeSurface(package.screen);
+        SDL_DestroyTexture(package.texture);
+        SDL_DestroyRenderer(package.renderer);
+        SDL_DestroyWindow(package.win);
+        SDL_Quit();
+	    return 0;
+	}
     Buttons_type buttons_set = set_buttons(package);
     if(buttons_set.up != SDLK_0)
     {
-        server = connect_to_server(LOCALHOST, nick, map);
-        if(initialize_players(buttons_set, server, map, package) == 0)
+        server = connect_to_server(LOCALHOST, nick, map, &important_treasure);
+        if (server != 0)
         {
-            start_game(buttons_set, server, map, package);
+            if (initialize_players(buttons_set, server, map, package, important_treasure) == 0)
+            {
+                start_game(buttons_set, server, map, package);
+                draw_end_game(&package, map);
+            }
+            close_connection_to_server(server);
         }
-	}  
-    close_connection_to_server(server);
+	}
     SDL_FreeSurface(package.screen);
     SDL_DestroyTexture(package.texture);
     SDL_DestroyRenderer(package.renderer);
