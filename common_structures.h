@@ -1,3 +1,4 @@
+#pragma once
 #define NUMBER_OF_CLIENTS 4
 #define PORT 7777
 #define SIZE_OF_DATA 2048
@@ -60,3 +61,22 @@ typedef struct Map_type
 	//mierzony czas
 	int time;
 }Map_type;
+
+//struktura danych przesyłanych do klienta
+typedef struct Thread_args
+{
+	//numer danego gracza
+	int player_number;
+	//wskaźnik na wspólną mapę
+	Map_type* map;
+	//wskaznik na zmienna, czy gracze sa gotowi
+	int* everybody_ready;
+	//wskaznik na zmienna, czy gracze wyszli z labiryntu
+	int* everybody_left;
+	//uchwyt mutexa mapy
+	HANDLE map_mutex;
+	//uchwyt mutexa gotowości graczy
+	HANDLE ready_mutex;
+	//uchwyt semafora czasu
+	HANDLE time_semaphore;
+}Thread_args;
