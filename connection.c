@@ -56,7 +56,7 @@ void deserialize_map_fully(char* data, Map_type* map, int* everybody_ready, int*
     position += sizeof(char);
 }
 
-void deserialize_map_important(char* data, Map_type* map)
+void deserialize_map_important(char* data, Map_type* map, int* everybody_ready)
 {
     int position = 0;
     for (int i = 0; i < NUMBER_OF_CLIENTS; i++)
@@ -78,6 +78,8 @@ void deserialize_map_important(char* data, Map_type* map)
 
     }
     memcpy(&(map->time), data + position, sizeof(int));
+    position += sizeof(int);
+    memcpy(everybody_ready, data + position, sizeof(int));
     position += sizeof(int);
 }
 
@@ -120,11 +122,11 @@ void receive_full_data_from_server(SOCKET s, Map_type* map, int* everybody_ready
     free(data);
 }
 
-void receive_important_data_from_server(SOCKET s, Map_type* map)
+void receive_important_data_from_server(SOCKET s, Map_type* map, int* everybody_ready)
 {
     char* data = (char*)malloc(SIZE_OF_IMPORTANT_DATA);
     recv(s, data, SIZE_OF_IMPORTANT_DATA, 0);
-    deserialize_map_important(data, map);
+    deserialize_map_important(data, map, everybody_ready);
     free(data);
 }
 
@@ -139,7 +141,7 @@ int ping_and_receive(SOCKET s, Map_type* map, int* everybody_ready, int* player_
     }
     else if (strcmp(buf, "important_map") == 0)
     {
-        receive_important_data_from_server(s, map);
+        receive_important_data_from_server(s, map, everybody_ready);
     }
     return latency;
 }

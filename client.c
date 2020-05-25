@@ -54,7 +54,7 @@ int load_nickname(SDL_package_type package, char* nick)
     return quit;
 }
 
-int initialize_players(Buttons_type buttons, SOCKET server, Map_type* map, SDL_package_type package, int important_treasure)
+int initialize_players(Buttons_type buttons, SOCKET server, Map_type* map, SDL_package_type package, int important_treasure, int* player_number)
 {
     int position_x = 150;
     int position_y = 120;
@@ -63,7 +63,6 @@ int initialize_players(Buttons_type buttons, SOCKET server, Map_type* map, SDL_p
     int ready = 0;
     int everybody_ready = 0;
     int quit = 0;
-    int player_number;
     char treasure_name[20];
     while (everybody_ready != 1 && !quit)
     {
@@ -111,7 +110,7 @@ int initialize_players(Buttons_type buttons, SOCKET server, Map_type* map, SDL_p
             }
         }
         char dummy;
-        latency = ping_and_receive(server, map, &everybody_ready, &player_number, &dummy);
+        latency = ping_and_receive(server, map, &everybody_ready, player_number, &dummy);
         SDL_UpdateTexture(package.texture, NULL, package.screen->pixels, package.screen->pitch);
         SDL_RenderCopy(package.renderer, package.texture, NULL, NULL);
         SDL_RenderPresent(package.renderer);
@@ -154,13 +153,12 @@ void draw_end_game(SDL_package_type* package, Map_type* map)
     }
 }
 
-void start_game(Buttons_type buttons, SOCKET server, Map_type* map, SDL_package_type package)
+void start_game(Buttons_type buttons, SOCKET server, Map_type* map, SDL_package_type package, int player_number)
 {
     SDL_Event event;
     int is_running = 1;
     int latency;
     int dummy;
-    int player_number = -1;
     char game_over = 0;
     while(is_running && game_over != 1)
     {
@@ -210,14 +208,7 @@ void start_game(Buttons_type buttons, SOCKET server, Map_type* map, SDL_package_
 				break;
 			};
 		};
-        if (player_number >= 0 && player_number <= 4)
-        {
-            latency = ping_and_receive(server, map, &dummy, &dummy, &game_over);
-        }
-        else
-        {
-            latency = ping_and_receive(server, map, &dummy, &player_number, &game_over);
-        }
+        latency = ping_and_receive(server, map, &dummy, &dummy, &game_over);
         SDL_UpdateTexture(package.texture, NULL, package.screen->pixels, package.screen->pitch);
         SDL_RenderCopy(package.renderer, package.texture, NULL, NULL);
         SDL_RenderPresent(package.renderer);
@@ -322,6 +313,7 @@ int main(int argc, char** argv)
     }
     char* nick = (char*)malloc(STRING_LENGTH); 
     int important_treasure = -1;
+    int player_number = -1;
     int quit = load_nickname(package, nick);
     if(quit)
     {
@@ -338,9 +330,9 @@ int main(int argc, char** argv)
         server = connect_to_server(LOCALHOST, nick, map, &important_treasure);
         if (server != 0)
         {
-            if (initialize_players(buttons_set, server, map, package, important_treasure) == 0)
+            if (initialize_players(buttons_set, server, map, package, important_treasure, &player_number) == 0)
             {
-                start_game(buttons_set, server, map, package);
+                start_game(buttons_set, server, map, package, player_number);
                 draw_end_game(&package, map);
             }
             close_connection_to_server(server);
