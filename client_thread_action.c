@@ -210,6 +210,14 @@ void get_skill(Thread_args* arguments)
 				arguments->map->players[player_number].skill = skill_index;
 				arguments->map->labyrinth[top][left] = FLOOR;
 				arguments->map->skills_number--;
+				if (WaitForSingleObject(arguments->flags_mutex, INFINITE) == WAIT_OBJECT_0)
+				{
+					for (int i = 0; i < NUMBER_OF_CLIENTS; i++)
+					{
+						arguments->flags[i] = 2;
+					}
+				}
+				ReleaseMutex(arguments->flags_mutex);
 			} 
 		}
 		ReleaseMutex(arguments->map_mutex);
@@ -244,16 +252,38 @@ void get_ping_initialize(Thread_args* arguments)
 		}
 	}
 	ReleaseMutex(arguments->ready_mutex);
-	strcpy(buf, "full_map");
-	send(client_socket, buf, STRING_LENGTH, 0);
-	char* data = (char*)malloc(SIZE_OF_DATA);
-	if (WaitForSingleObject(arguments->map_mutex, INFINITE) == WAIT_OBJECT_0)
+	if (WaitForSingleObject(arguments->flags_mutex, INFINITE) == WAIT_OBJECT_0)
 	{
-		serialize_map_fully(data, arguments->map, arguments->everybody_ready, &player_number, 0);
+		if(arguments->flags[player_number] == 2)
+		{
+			arguments->flags[player_number] = 0;
+			ReleaseMutex(arguments->flags_mutex);
+			strcpy(buf, "full_map");
+			send(client_socket, buf, STRING_LENGTH, 0);
+			char* data = (char*)malloc(SIZE_OF_DATA);
+			if (WaitForSingleObject(arguments->map_mutex, INFINITE) == WAIT_OBJECT_0)
+			{
+				serialize_map_fully(data, arguments->map, arguments->everybody_ready, &player_number, 0);
+			}
+			ReleaseMutex(arguments->map_mutex);
+			send(client_socket, data, SIZE_OF_DATA, 0);
+			free(data);
+		}
+		else
+		{
+			ReleaseMutex(arguments->flags_mutex);
+			strcpy(buf, "important_map");
+			send(client_socket, buf, STRING_LENGTH, 0);
+			char* data = (char*)malloc(SIZE_OF_IMPORTANT_DATA);
+			if (WaitForSingleObject(arguments->map_mutex, INFINITE) == WAIT_OBJECT_0)
+			{
+				serialize_map_important(data, arguments->map);
+			}
+			ReleaseMutex(arguments->map_mutex);
+			send(client_socket, data, SIZE_OF_IMPORTANT_DATA, 0);
+			free(data);
+		}
 	}
-	ReleaseMutex(arguments->map_mutex);
-	send(client_socket, data, SIZE_OF_DATA, 0);
-	free(data);
 }
 
 void get_chest(Thread_args* arguments)
@@ -281,6 +311,14 @@ void get_chest(Thread_args* arguments)
 				{
 					arguments->map->players[player_number].points += 20;
 				}
+				if (WaitForSingleObject(arguments->flags_mutex, INFINITE) == WAIT_OBJECT_0)
+				{
+					for (int i = 0; i < NUMBER_OF_CLIENTS; i++)
+					{
+						arguments->flags[i] = 2;
+					}
+				}
+				ReleaseMutex(arguments->flags_mutex);
 			} 
 		}
 		ReleaseMutex(arguments->map_mutex);
@@ -306,13 +344,13 @@ int get_ping_game(Thread_args* arguments)
 	ReleaseMutex(arguments->map_mutex);
 	strcpy(buf, "pong");
 	send(client_socket, buf, STRING_LENGTH, 0);
-	strcpy(buf, "full_map");
-	send(client_socket, buf, STRING_LENGTH, 0);
-	char* data = (char*)malloc(SIZE_OF_DATA);
+	char* data;
 	if (WaitForSingleObject(arguments->map_mutex, INFINITE) == WAIT_OBJECT_0)
 	{
 		if (*(arguments->everybody_left) == 1 || arguments->map->time == 0)
 		{
+			strcpy(buf, "full_map");
+			send(client_socket, buf, STRING_LENGTH, 0);
 			serialize_map_fully(data, arguments->map, arguments->everybody_ready, &player_number, 1);
 			ReleaseMutex(arguments->map_mutex);
 			send(client_socket, data, SIZE_OF_DATA, 0);
@@ -321,10 +359,39 @@ int get_ping_game(Thread_args* arguments)
 		}
 		else
 		{
-			serialize_map_fully(data, arguments->map, arguments->everybody_ready, &player_number, 0);
-			ReleaseMutex(arguments->map_mutex);
-			send(client_socket, data, SIZE_OF_DATA, 0);
-			free(data);
+
+			if (WaitForSingleObject(arguments->flags_mutex, INFINITE) == WAIT_OBJECT_0)
+			{
+				if(arguments->flags[player_number] == 2)
+				{
+					arguments->flags[player_number] = 0;
+					ReleaseMutex(arguments->flags_mutex);
+					strcpy(buf, "full_map");
+					send(client_socket, buf, STRING_LENGTH, 0);
+					data = (char*)malloc(SIZE_OF_DATA);
+					if (WaitForSingleObject(arguments->map_mutex, INFINITE) == WAIT_OBJECT_0)
+					{
+						serialize_map_fully(data, arguments->map, arguments->everybody_ready, &player_number, 0);
+					}
+					ReleaseMutex(arguments->map_mutex);
+					send(client_socket, data, SIZE_OF_DATA, 0);
+					free(data);
+				}
+				else
+				{
+					ReleaseMutex(arguments->flags_mutex);
+					strcpy(buf, "important_map");
+					send(client_socket, buf, STRING_LENGTH, 0);
+					data = (char*)malloc(SIZE_OF_IMPORTANT_DATA);
+					if (WaitForSingleObject(arguments->map_mutex, INFINITE) == WAIT_OBJECT_0)
+					{
+						serialize_map_important(data, arguments->map);
+					}
+					ReleaseMutex(arguments->map_mutex);
+					send(client_socket, data, SIZE_OF_IMPORTANT_DATA, 0);
+					free(data);
+				}
+			}
 		}
 	}
 	return 0;

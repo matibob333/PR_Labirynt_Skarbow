@@ -54,6 +54,14 @@ DWORD WINAPI skills_thread(void* args)
 				arguments->map->labyrinth[y][x] = SKILL_OFFSET + skill_id;
 				arguments->map->skills_number++;
 				printf("Dodano umiejetnosc\n");
+				if(WaitForSingleObject(arguments->flags_mutex, INFINITE)==WAIT_OBJECT_0)
+				{
+					for(int i=0;i<NUMBER_OF_CLIENTS;i++)
+					{
+						arguments->flags[i] = 2;
+					}
+				}
+				ReleaseMutex(arguments->flags_mutex);
 			}
 		}
 		ReleaseMutex(arguments->map_mutex);
@@ -89,6 +97,14 @@ DWORD WINAPI client_thread(void* args)
 			if (strcmp(buf, "connect")==0)
 			{
 				connect_to_client(arguments);
+				if (WaitForSingleObject(arguments->flags_mutex) == WAIT_OBJECT_0)
+				{
+					for (int i = 0; i < NUMBER_OF_CLIENTS; i++)
+					{
+						arguments->flags[i] = 2;
+					}
+				}
+				ReleaseMutex(arguments->flags_mutex);
 			}
 			//gracz zg³asza gotowoœæ
 			else if (strcmp(buf, "ready")==0)
@@ -112,6 +128,14 @@ DWORD WINAPI client_thread(void* args)
 			else if (strcmp(buf, "disconnect")==0)
 			{
 				disconnect(arguments);
+				if (WaitForSingleObject(arguments->flags_mutex, INFINITE) == WAIT_OBJECT_0)
+				{
+					for (int i = 0; i < NUMBER_OF_CLIENTS; i++)
+					{
+						arguments->flags[i] = 2;
+					}
+				}
+				ReleaseMutex(arguments->flags_mutex);
 				//zakoñczenie w¹tku
 				free(arguments);
 				return 0;
@@ -150,6 +174,14 @@ DWORD WINAPI client_thread(void* args)
 			else if (strcmp(buf, "end_game") == 0)
 			{
 				end_game(arguments);
+				if (WaitForSingleObject(arguments->flags_mutex, INFINITE) == WAIT_OBJECT_0)
+				{
+					for (int i = 0; i < NUMBER_OF_CLIENTS; i++)
+					{
+						arguments->flags[i] = 2;
+					}
+				}
+				ReleaseMutex(arguments->flags_mutex);
 			}
 			else if(strcmp(buf, "skill")==0)
 			{
@@ -158,6 +190,14 @@ DWORD WINAPI client_thread(void* args)
 			else if (strcmp(buf, "disconnect")==0)
 			{
 				disconnect(arguments);
+				if (WaitForSingleObject(arguments->flags_mutex, INFINITE) == WAIT_OBJECT_0)
+				{
+					for (int i = 0; i < NUMBER_OF_CLIENTS; i++)
+					{
+						arguments->flags[i] = 2;
+					}
+				}
+				ReleaseMutex(arguments->flags_mutex);
 			}
 			else
 			{
@@ -179,11 +219,13 @@ DWORD WINAPI client_thread(void* args)
 int main()
 {
 	srand((unsigned int)time(NULL));	
-	HANDLE map_mutex, ready_mutex, time_semaphore;
+	HANDLE map_mutex, ready_mutex, time_semaphore, flags_mutex;
 	map_mutex = CreateMutex(NULL, FALSE, NULL);
 	ready_mutex = CreateMutex(NULL, FALSE, NULL);
 	time_semaphore = CreateSemaphore(NULL, 0, 1, NULL);
+	flags_mutex = CreateMutex(NULL, FALSE, NULL);
 	Map_type map;
+	int flags[NUMBER_OF_CLIENTS];
 	read_BMP("labyrinth.bmp", &map);
 	set_exit(&map);
 	set_treasures(&map);
@@ -195,6 +237,7 @@ int main()
 	Player_type players[NUMBER_OF_CLIENTS];
 	for (int i = 0; i < NUMBER_OF_CLIENTS; i++) 
 	{
+		flags[i] = 0;
 		players[i].connected = 0;
 		strcpy(players[i].nick, " ");
 		players[i].ready = 0;
@@ -257,6 +300,8 @@ int main()
 	thread_args->ready_mutex = ready_mutex;
 	thread_args->time_semaphore = time_semaphore;
 	thread_args->map = &map;
+	thread_args->flags_mutex = flags_mutex;
+	thread_args->flags = flags;
 	CreateThread(NULL, 0, skills_thread, (void*)thread_args, 0, &id);
 	thread_args = (Thread_args*)malloc(sizeof(Thread_args));
 	thread_args->everybody_ready = &everybody_ready;
@@ -265,6 +310,8 @@ int main()
 	thread_args->ready_mutex = ready_mutex;
 	thread_args->time_semaphore = time_semaphore;
 	thread_args->map = &map;
+	thread_args->flags_mutex = flags_mutex;
+	thread_args->flags = flags;
 	CreateThread(NULL, 0, time_thread, (void*)thread_args, 0, &id);
 	while (1)
 	{
@@ -278,6 +325,8 @@ int main()
 		thread_args->map_mutex = map_mutex;
 		thread_args->ready_mutex = ready_mutex;
 		thread_args->time_semaphore = time_semaphore;
+		thread_args->flags_mutex = flags_mutex;
+		thread_args->flags = flags;
 		for(int i=0;i<NUMBER_OF_CLIENTS;i++)
 		{
 			if(!players[i].connected)

@@ -65,6 +65,31 @@ void serialize_map_fully(char* data, Map_type* map, int* everybody_ready, int* p
 	position += sizeof(char);
 }
 
+void serialize_map_important(char* data, Map_type* map)
+{
+	strcpy(data, "");
+	int position = 0;
+	for (int i = 0; i < NUMBER_OF_CLIENTS; i++)
+	{
+		memcpy(data + position, &(map->players[i].x), sizeof(int));
+		position += sizeof(int);
+		memcpy(data + position, &(map->players[i].y), sizeof(int));
+		position += sizeof(int);
+		memcpy(data + position, &(map->players[i].connected), sizeof(int));
+		position += sizeof(int);
+		memcpy(data + position, &(map->players[i].ready), sizeof(int));
+		position += sizeof(int);
+		memcpy(data + position, &(map->players[i].skill), sizeof(int));
+		position += sizeof(int);
+		memcpy(data + position, &(map->players[i].frozen), sizeof(int));
+		position += sizeof(int);
+		memcpy(data + position, &(map->players[i].speed), sizeof(int));
+		position += sizeof(int);
+	}
+	memcpy(data + position, &(map->time), sizeof(int));
+	position += sizeof(int);
+}
+
 void send_important_treasure_id_to_client(SOCKET s, int id)
 {
 	char* int_holder = (char*)malloc(sizeof(int));

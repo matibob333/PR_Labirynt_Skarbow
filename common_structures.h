@@ -2,6 +2,7 @@
 #define NUMBER_OF_CLIENTS 4
 #define PORT 7777
 #define SIZE_OF_DATA 2048
+#define SIZE_OF_IMPORTANT_DATA 128
 #define STRING_LENGTH 20
 #define SPEED 4
 #define NEW_SPEED 8
@@ -79,4 +80,8 @@ typedef struct Thread_args
 	HANDLE ready_mutex;
 	//uchwyt semafora czasu
 	HANDLE time_semaphore;
+	//tablica flag do przesyłania danych
+	int* flags;
+	//uchwyt mutexa flag
+	HANDLE flags_mutex;
 }Thread_args;

@@ -56,6 +56,32 @@ void deserialize_map_fully(char* data, Map_type* map, int* everybody_ready, int*
     position += sizeof(char);
 }
 
+void deserialize_map_important(char* data, Map_type* map)
+{
+    int position = 0;
+    for (int i = 0; i < NUMBER_OF_CLIENTS; i++)
+    {
+        memcpy(&(map->players[i].x), data + position, sizeof(int));
+        position += sizeof(int);
+        memcpy(&(map->players[i].y), data + position, sizeof(int));
+        position += sizeof(int);
+        memcpy(&(map->players[i].connected), data + position, sizeof(int));
+        position += sizeof(int);
+        memcpy(&(map->players[i].ready), data + position, sizeof(int));
+        position += sizeof(int);
+        memcpy(&(map->players[i].skill), data + position, sizeof(int));
+        position += sizeof(int);
+        memcpy(&(map->players[i].frozen), data + position, sizeof(int));
+        position += sizeof(int);
+        memcpy(&(map->players[i].speed), data + position, sizeof(int));
+        position += sizeof(int);
+
+    }
+    memcpy(&(map->time), data + position, sizeof(int));
+    position += sizeof(int);
+}
+
+
 int ping_server(SOCKET s)
 {
     int latency = 0;
@@ -94,6 +120,14 @@ void receive_full_data_from_server(SOCKET s, Map_type* map, int* everybody_ready
     free(data);
 }
 
+void receive_important_data_from_server(SOCKET s, Map_type* map)
+{
+    char* data = (char*)malloc(SIZE_OF_IMPORTANT_DATA);
+    recv(s, data, SIZE_OF_IMPORTANT_DATA, 0);
+    deserialize_map_important(data, map);
+    free(data);
+}
+
 int ping_and_receive(SOCKET s, Map_type* map, int* everybody_ready, int* player_number, char* game_over)
 {
     char buf[STRING_LENGTH];
@@ -102,6 +136,10 @@ int ping_and_receive(SOCKET s, Map_type* map, int* everybody_ready, int* player_
     if (strcmp(buf, "full_map") == 0)
     {
         receive_full_data_from_server(s, map, everybody_ready, player_number, game_over);
+    }
+    else if (strcmp(buf, "important_map") == 0)
+    {
+        receive_important_data_from_server(s, map);
     }
     return latency;
 }
